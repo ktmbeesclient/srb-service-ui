@@ -1,0 +1,732 @@
+import React, { useState, useEffect } from "react";
+import DashboardLayout from "@/layouts/DashboardLayout";
+import { useRouter } from "next/router";
+import { Plus, ArrowLeft, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { UserRolesEnum } from "@/utils/enums/enum";
+import {
+  Group,
+  Text,
+  Title,
+  Paper,
+  TextInput,
+  Select,
+  Checkbox,
+  SimpleGrid,
+  ActionIcon,
+  NumberInput,
+  Box,
+  Table,
+  Autocomplete,
+  Modal,
+} from "@mantine/core";
+
+import { CommonButton } from "@/components/common";
+import {
+  FiscalYear,
+  getFiscalYearFromDate,
+  toRFC3339,
+} from "@/utils/helpers/dateFormatter";
+import {
+  ApiGetTransactionById,
+  ApiCreateClientTransaction,
+  ApiUpdateClientTransaction,
+  APIGetPartiesOrPan,
+  TransactionPayload,
+} from "../../../../../apis/transaction";
+import { ApiGetClientBySlug } from "../../../../../apis/client";
+import showNotify from "@/utils/notify";
+
+
+type TxItem = {
+  id: string;
+  date: string;
+  invoice: number;
+  debitInvoice?: number;
+  creditInvoice?: number;
+  pan: string;
+  particulars: string;
+  isImport?: boolean;
+  isCapitalPurchase?: boolean;
+  amount: number;
+  taxable: number;
+  nonTaxable: number;
+  vatPercent: number;
+  tax: number;
+  grandTotal: number;
+};
+
+type TxErrors = {
+  date?: string;
+  invoice?: string;
+  pan?: string;
+  items?: string;
+};
+
+const getTodayDate = () => new Date().toISOString().split("T")[0];
+
+const uiToApiType: Record<string, string> = {
+  Sales: "SALES",
+  Purchase: "PURCHASE",
+  "Sales Return": "SALES_RETURN",
+  "Purchase Return": "PURCHASE_RETURN",
+};
+const apiToUiType: Record<string, string> = {
+  SALES: "Sales",
+  PURCHASE: "Purchase",
+  SALES_RETURN: "Sales Return",
+  PURCHASE_RETURN: "Purchase Return",
+};
+
+const extractTransaction = (payload: any): any =>
+  payload?.data?.data ?? payload?.data?.transaction ?? payload?.data ?? payload;
+
+const extractErrorMessage = (source: any, fallback: string): string =>
+  source?.data?.error ||
+  source?.data?.message ||
+  source?.response?.data?.error ||
+  source?.response?.data?.message ||
+  source?.message ||
+  fallback;
+
+const itemToPayload = (
+  type: string,
+  item: TxItem,
+): TransactionPayload => ({
+  transaction_type: uiToApiType[type] || "SALES",
+  transaction_date: toRFC3339(item.date),
+  pan_no: Number(item.pan) || 0,
+  party: item.particulars,
+  invoice_no: item.invoice ? Number(item.invoice) || 0 : 0,
+  debit_invoice_no: item.debitInvoice ? Number(item.debitInvoice) || 0 : 0,
+  credit_invoice_no: item.creditInvoice ? Number(item.creditInvoice) || 0 : 0,
+  amount: item.amount,
+  taxable: item.taxable,
+  non_taxable: item.nonTaxable,
+  vat: item.vatPercent,
+  vat_amount: item.tax,
+  grand_total: item.grandTotal,
+  status: true,
+  import: item.isImport || false,
+  capital: item.isCapitalPurchase || false,
+});
+
+export default function AddTransaction() {
+  const router = useRouter();
+  const { slug, txId } = router.query;
+
+  const [txFormErrors, setTxFormErrors] = useState<TxErrors>({});
+  const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
+  const [clientId, setClientId] = useState<string>("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [particularSuggestions, setParticularSuggestions] = useState<string[]>([]);
+  const [partyPanRecords, setPartyPanRecords] = useState<{ party: string; pan: string }[]>([]);
+
+  const [formData, setFormData] = useState({
+    type: "Sales",
+    items: [
+      {
+        id: Date.now().toString(),
+        date: getTodayDate(),
+        invoice: 0,
+        pan: "",
+        particulars: "",
+        isImport: false,
+        isCapitalPurchase: false,
+        amount: 0,
+        taxable: 0,
+        nonTaxable: 0,
+        vatPercent: 0,
+        tax: 0,
+        grandTotal: 0,
+      },
+    ] as TxItem[],
+  });
+
+  const currentFiscalYear = React.useMemo(
+    () => getFiscalYearFromDate(formData.items[0]?.date || getTodayDate(), fiscalYears),
+    [formData.items, fiscalYears],
+  );
+
+  const currentVatRate = currentFiscalYear?.vatAmount ?? 0;
+
+  useEffect(() => {
+    const storedFiscalYears = localStorage.getItem("fiscalYears");
+    if (storedFiscalYears) {
+      setFiscalYears(JSON.parse(storedFiscalYears));
+    } else {
+      const initialFiscalYears = [
+        { id: "1", year: "2082/83", vatAmount: 13 },
+        { id: "2", year: "2083/84", vatAmount: 13 },
+      ];
+      setFiscalYears(initialFiscalYears);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!txId && fiscalYears.length > 0) {
+      setFormData((prev) => {
+        if (
+          prev.items.length === 1 &&
+          prev.items[0].vatPercent === 0 &&
+          prev.items[0].taxable === 0
+        ) {
+          const defaultVat = getFiscalYearFromDate(prev.items[0].date, fiscalYears)?.vatAmount ?? 0;
+          if (defaultVat > 0) {
+            const newItems = [...prev.items];
+            newItems[0] = { ...newItems[0], vatPercent: defaultVat };
+            return { ...prev, items: newItems };
+          }
+        }
+        return prev;
+      });
+    }
+  }, [fiscalYears, txId]);
+
+  useEffect(() => {
+    if (!slug || typeof slug !== "string") return;
+    (async () => {
+      try {
+        const res = await ApiGetClientBySlug(slug);
+        if (res?.data?.success && res.data.data?.id) {
+          setClientId(String(res.data.data.id));
+          return;
+        }
+      } catch (error) {
+        console.error("Error resolving client for transaction form", error);
+        showNotify("error", "Failed to load client details. Please try again.");
+      }
+      setClientId(slug);
+    })();
+  }, [slug]);
+
+  useEffect(() => {
+    if (!txId || typeof txId !== "string") return;
+    (async () => {
+      try {
+        const res = await ApiGetTransactionById(txId);
+        const tx = extractTransaction(res);
+        if (!tx) return;
+
+        const loadedItem: TxItem = {
+          id: Date.now().toString(),
+          date: tx.transaction_date ? String(tx.transaction_date).split("T")[0] : getTodayDate(),
+          invoice: tx.invoice_no && tx.invoice_no !== 0 ? Number(tx.invoice_no) : 0,
+          debitInvoice: tx.debit_invoice_no && tx.debit_invoice_no !== 0 ? Number(tx.debit_invoice_no) : 0,
+          creditInvoice: tx.credit_invoice_no && tx.credit_invoice_no !== 0 ? Number(tx.credit_invoice_no) : 0,
+          pan: tx.pan_no ? String(tx.pan_no) : "",
+          particulars: tx.party || "",
+          isImport: Boolean(tx.import),
+          isCapitalPurchase: Boolean(tx.capital),
+          amount: Number(tx.amount) || 0,
+          taxable: Number(tx.taxable) || 0,
+          nonTaxable: Number(tx.non_taxable) || 0,
+          vatPercent: Number(tx.vat) || 0,
+          tax: Number(tx.vat_amount) || 0,
+          grandTotal: Number(tx.grand_total) || 0,
+        };
+
+        setFormData({
+          type: apiToUiType[tx.transaction_type] || "Sales",
+          items: [loadedItem],
+        });
+      } catch (error) {
+        console.error("Error loading transaction for edit", error);
+        showNotify("error", "Failed to load transaction. Please try again.");
+      }
+    })();
+  }, [txId]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let targetCategory = "";
+    if (formData.type === "Sales" || formData.type === "Purchase Return") {
+      targetCategory = "PURCHASE";
+    } else if (formData.type === "Sales Return") {
+      targetCategory = "SALES";
+    } else if (formData.type === "Purchase") {
+      targetCategory = "PURCHASE";
+    }
+
+    (async () => {
+      try {
+        const res = await APIGetPartiesOrPan({ client_id: clientId, category: targetCategory });
+        const raw = res?.data?.data ?? res?.data ?? [];
+        const records = Array.isArray(raw)
+          ? raw
+              .map((p: any) => ({
+                party: String(p?.party ?? p?.name ?? "").trim(),
+                pan: String(p?.pan_no ?? p?.pan ?? "").trim(),
+              }))
+              .filter((r: { party: string; pan: string }) => r.party)
+          : [];
+
+        const seen = new Map<string, string>();
+        records.forEach((r: { party: string; pan: string }) => {
+          if (!seen.has(r.party)) seen.set(r.party, r.pan);
+        });
+        const deduped = Array.from(seen.entries()).map(([party, pan]) => ({ party, pan }));
+
+        setPartyPanRecords(deduped);
+        setParticularSuggestions(deduped.map((r) => r.party));
+      } catch (error) {
+        console.error("Error fetching particulars suggestions", error);
+        setPartyPanRecords([]);
+        setParticularSuggestions([]);
+        showNotify("error", "Failed to load party/PAN suggestions. You can still enter them manually.");
+      }
+    })();
+  }, [clientId, formData.type]);
+
+  const panToParty = React.useMemo(() => {
+    const map = new Map<string, string>();
+    partyPanRecords.forEach((r) => {
+      if (r.pan && !map.has(r.pan)) map.set(r.pan, r.party);
+    });
+    return map;
+  }, [partyPanRecords]);
+
+  const partyToPan = React.useMemo(() => {
+    const map = new Map<string, string>();
+    partyPanRecords.forEach((r) => {
+      if (r.party && r.pan && !map.has(r.party)) map.set(r.party, r.pan);
+    });
+    return map;
+  }, [partyPanRecords]);
+
+  const validateTxForm = (): boolean => {
+    const errors: TxErrors = {};
+    if (formData.items.length === 0) {
+      errors.items = "At least one item is required.";
+    } else {
+      let hasError = false;
+      let amountError = false;
+      const isReturn = formData.type === "Sales Return" || formData.type === "Purchase Return";
+      for (const item of formData.items) {
+        if (!item.date) hasError = true;
+        if (!isReturn && item.invoice === 0) hasError = true;
+        if (!item.pan.trim()) hasError = true;
+        if (!item.particulars.trim()) hasError = true;
+        if (item.amount < 0 || item.taxable < 0 || item.nonTaxable < 0) hasError = true;
+        if (item.amount !== item.taxable + item.nonTaxable) amountError = true;
+      }
+      if (hasError)
+        errors.items = "All items must have date, invoice, PAN, particulars and valid amounts.";
+      else if (amountError)
+        errors.items = "Amount must be exactly the sum of Taxable and Non-Taxable amounts.";
+    }
+
+    setTxFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSaveTransaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateTxForm()) {
+      showNotify("warning", "Please fix the highlighted errors before saving.");
+      return;
+    }
+    if (!clientId) {
+      showNotify("error", "Client not loaded yet. Please wait a moment and try again.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payloads = formData.items.map((item) => itemToPayload(formData.type, item));
+
+      if (txId && typeof txId === "string") {
+        const [firstPayload, ...restPayloads] = payloads;
+        const res = await ApiUpdateClientTransaction(clientId, txId, firstPayload);
+        if (res?.data?.success === false) {
+          throw new Error(extractErrorMessage(res, "Failed to update transaction."));
+        }
+        if (restPayloads.length > 0) {
+          const createRes = await ApiCreateClientTransaction(clientId, restPayloads);
+          if (createRes?.data?.success === false) {
+            throw new Error(extractErrorMessage(createRes, "Failed to create additional transactions."));
+          }
+        }
+        showNotify("success", "Transaction updated successfully.");
+      } else {
+        const res = await ApiCreateClientTransaction(clientId, payloads);
+        if (res?.data?.success === false) {
+          throw new Error(extractErrorMessage(res, "Failed to create transaction."));
+        }
+        showNotify("success", "Transaction created successfully.");
+      }
+
+      router.push(`/admin/clients/${slug}`);
+    } catch (error: any) {
+      console.error("Error saving transaction", error);
+      showNotify("error", extractErrorMessage(error, `Failed to ${txId ? "update" : "create"} transaction. Please try again.`));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleItemChange = (index: number, field: keyof TxItem, value: any) => {
+    const newItems = [...formData.items];
+    const item = { ...newItems[index], [field]: value };
+
+    if (field === "amount" || field === "taxable" || field === "nonTaxable" || field === "vatPercent") {
+      item[field] = Number(value) || 0;
+    }
+
+    if (field === "date") {
+      item.vatPercent = getFiscalYearFromDate(item.date, fiscalYears)?.vatAmount ?? currentVatRate;
+    }
+
+    if (field === "pan") {
+      const matchedParty = panToParty.get(String(item.pan).trim());
+      if (matchedParty) item.particulars = matchedParty;
+    }
+
+    if (field === "particulars") {
+      const matchedPan = partyToPan.get(String(item.particulars).trim());
+      if (matchedPan) item.pan = matchedPan;
+    }
+
+    const tax = item.taxable * (item.vatPercent / 100);
+    item.tax = Number(tax.toFixed(2));
+    item.grandTotal = Number((item.taxable + item.nonTaxable + tax).toFixed(2));
+
+    newItems[index] = item;
+    setFormData((prev) => ({ ...prev, items: newItems }));
+  };
+
+  const addItemRow = () => {
+    setFormData((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          id: Date.now().toString(),
+          date: getTodayDate(),
+          invoice: 0,
+          pan: "",
+          particulars: "",
+          isImport: false,
+          isCapitalPurchase: false,
+          amount: 0,
+          taxable: 0,
+          nonTaxable: 0,
+          vatPercent: currentVatRate,
+          tax: 0,
+          grandTotal: 0,
+        },
+      ],
+    }));
+  };
+
+  const [removeRowIndex, setRemoveRowIndex] = useState<number | null>(null);
+  const requestRemoveItemRow = (index: number) => {
+    if (formData.items.length <= 1) return;
+    setRemoveRowIndex(index);
+  };
+  const cancelRemoveItemRow = () => setRemoveRowIndex(null);
+  const confirmRemoveItemRow = () => {
+    if (removeRowIndex === null) return;
+    setFormData((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== removeRowIndex),
+    }));
+    showNotify("success", "Row removed.");
+    setRemoveRowIndex(null);
+  };
+
+  // Dynamically calculate explicit footer colSpan to prevent misalignments
+  const isReturnMode = ["Sales Return", "Purchase Return"].includes(formData.type);
+  const footerColSpan = (isReturnMode ? 10 : 9) + (formData.type === "Purchase" ? 1 : 0);
+
+  return (
+    <DashboardLayout role={UserRolesEnum.SUPER_ADMIN}>
+      <Box mb="xl">
+        <CommonButton
+          component={Link}
+          href={`/admin/clients/${slug}`}
+          variant="subtle"
+          color="var(--muted-foreground)"
+          leftSection={<ArrowLeft size={16} />}
+          mb="md"
+        >
+          Back to Client Details
+        </CommonButton>
+        <Group justify="space-between" align="flex-end">
+          <Box>
+            <Title order={2}>
+              {txId ? "Edit Transaction" : "Add Transaction"}
+            </Title>
+          </Box>
+        </Group>
+      </Box>
+
+      <Paper withBorder radius="md" p="md">
+        <form onSubmit={handleSaveTransaction} noValidate>
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
+            <Select
+              required
+              label="Transaction Type"
+              data={["Sales", "Purchase", "Sales Return", "Purchase Return"]}
+              value={formData.type}
+              onChange={(val) => {
+                const newType = val || "Sales";
+                setFormData((prev) => ({ ...prev, type: newType }));
+              }}
+            />
+          </SimpleGrid>
+
+          <Box mb="xl" style={{ overflowX: "auto" }}>
+            <Text fw={600} mb="xs">
+              Line Items
+            </Text>
+            {txFormErrors.items && (
+              <Text c="red" size="sm" mb="xs">
+                {txFormErrors.items}
+              </Text>
+            )}
+            {formData.items.some((item) => item.amount !== item.taxable + item.nonTaxable) && (
+              <Text c="red" size="sm" mb="xs">
+                Amount must be exactly the sum of Taxable and Non-Taxable amounts.
+              </Text>
+            )}
+            
+            <Table withTableBorder withColumnBorders style={{ tableLayout: "auto" }}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={{ minWidth: 130 }}>Date</Table.Th>
+                  {isReturnMode ? (
+                    <>
+                      <Table.Th style={{ minWidth: 140 }}>Debit Invoice</Table.Th>
+                      <Table.Th style={{ minWidth: 140 }}>Credit Invoice</Table.Th>
+                    </>
+                  ) : (
+                    <Table.Th style={{ minWidth: 140 }}>Invoice No.</Table.Th>
+                  )}
+                  <Table.Th style={{ minWidth: 120 }}>PAN/VAT</Table.Th>
+                  <Table.Th style={{ minWidth: 180 }}>Party/Particulars</Table.Th>
+                  {formData.type === "Purchase" && (
+                    <Table.Th style={{ minWidth: 150 }}>Import / Capital</Table.Th>
+                  )}
+                  <Table.Th style={{ minWidth: 120 }}>Amount</Table.Th>
+                  <Table.Th style={{ minWidth: 120 }}>Taxable</Table.Th>
+                  <Table.Th style={{ minWidth: 120 }}>NonTaxable</Table.Th>
+                  <Table.Th style={{ minWidth: 90 }}>VAT %</Table.Th>
+                  <Table.Th style={{ minWidth: 110 }}>VAT Amount</Table.Th>
+                  <Table.Th style={{ minWidth: 140 }}>Grand Total</Table.Th>
+                  <Table.Th style={{ width: 50 }} />
+                </Table.Tr>
+              </Table.Thead>
+              
+              <Table.Tbody>
+                {formData.items.map((item, index) => (
+                  <Table.Tr key={item.id}>
+                    <Table.Td>
+                      <TextInput
+                        type="date"
+                        value={item.date}
+                        onChange={(e) => handleItemChange(index, "date", e.currentTarget.value)}
+                        variant="unstyled"
+                      />
+                    </Table.Td>
+                    {isReturnMode ? (
+                      <>
+                        <Table.Td>
+                          <TextInput
+                            placeholder="Debit Invoice"
+                            value={item.debitInvoice || ""}
+                            onChange={(e) => handleItemChange(index, "debitInvoice", e.currentTarget.value)}
+                            variant="unstyled"
+                          />
+                        </Table.Td>
+                        <Table.Td>
+                          <TextInput
+                            placeholder="Credit Invoice"
+                            value={item.creditInvoice || ""}
+                            onChange={(e) => handleItemChange(index, "creditInvoice", e.currentTarget.value)}
+                            variant="unstyled"
+                          />
+                        </Table.Td>
+                      </>
+                    ) : (
+                      <Table.Td>
+                        <TextInput
+                          placeholder="Invoice"
+                          value={item.invoice || ""}
+                          onChange={(e) => handleItemChange(index, "invoice", e.currentTarget.value)}
+                          variant="unstyled"
+                        />
+                      </Table.Td>
+                    )}
+                    <Table.Td>
+                      <TextInput
+                        placeholder="PAN"
+                        maxLength={9}
+                        value={item.pan}
+                        onChange={(e) => handleItemChange(index, "pan", e.currentTarget.value.replace(/\D/g, ""))}
+                        variant="unstyled"
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <Autocomplete
+                        placeholder="Particulars"
+                        data={particularSuggestions}
+                        value={item.particulars}
+                        onChange={(value) => handleItemChange(index, "particulars", value)}
+                        variant="unstyled"
+                      />
+                    </Table.Td>
+                    {formData.type === "Purchase" && (
+                      <Table.Td>
+                        <Group gap="xs" style={{ whiteSpace: "nowrap" }}>
+                          <Checkbox
+                            label="Import"
+                            size="xs"
+                            checked={item.isImport || false}
+                            onChange={(e) => handleItemChange(index, "isImport", e.currentTarget.checked)}
+                          />
+                          <Checkbox
+                            label="Capital Purchase"
+                            size="xs"
+                            checked={item.isCapitalPurchase || false}
+                            onChange={(e) => handleItemChange(index, "isCapitalPurchase", e.currentTarget.checked)}
+                          />
+                        </Group>
+                      </Table.Td>
+                    )}
+                    <Table.Td>
+                      <NumberInput
+                        value={item.amount}
+                        min={0}
+                        onChange={(v) => handleItemChange(index, "amount", v)}
+                        variant="unstyled"
+                        hideControls
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <NumberInput
+                        value={item.taxable}
+                        min={0}
+                        onChange={(v) => handleItemChange(index, "taxable", v)}
+                        variant="unstyled"
+                        hideControls
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <NumberInput
+                        value={item.nonTaxable}
+                        min={0}
+                        onChange={(v) => handleItemChange(index, "nonTaxable", v)}
+                        variant="unstyled"
+                        hideControls
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <NumberInput
+                        value={item.vatPercent}
+                        suffix="%"
+                        onChange={(v) => handleItemChange(index, "vatPercent", v)}
+                        variant="unstyled"
+                        hideControls
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <NumberInput
+                        value={item.tax}
+                        readOnly
+                        variant="unstyled"
+                        hideControls
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <NumberInput
+                        value={item.grandTotal}
+                        readOnly
+                        variant="unstyled"
+                        hideControls
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <ActionIcon
+                        color="red"
+                        variant="subtle"
+                        onClick={() => requestRemoveItemRow(index)}
+                        disabled={formData.items.length === 1}
+                      >
+                        <Trash2 size={16} />
+                      </ActionIcon>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+              
+              <Table.Tfoot>
+                <Table.Tr>
+                  <Table.Th colSpan={footerColSpan}>
+                    <CommonButton
+                      variant="subtle"
+                      size="xs"
+                      leftSection={<Plus size={14} />}
+                      onClick={addItemRow}
+                    >
+                      Add Row
+                    </CommonButton>
+                  </Table.Th>
+                  <Table.Th>
+                    {formData.items
+                      .reduce((s, i) => s + i.grandTotal, 0)
+                      .toLocaleString()}
+                  </Table.Th>
+                  <Table.Th />
+                </Table.Tr>
+              </Table.Tfoot>
+            </Table>
+          </Box>
+
+          <Group justify="flex-end">
+            <CommonButton
+              variant="default"
+              onClick={() => router.push(`/admin/clients/${slug}`)}
+            >
+              Cancel
+            </CommonButton>
+            <CommonButton type="submit" loading={isSaving}>
+              Save Transaction
+            </CommonButton>
+          </Group>
+        </form>
+      </Paper>
+
+      {removeRowIndex !== null && (
+        <RemoveRowConfirm
+          onCancel={cancelRemoveItemRow}
+          onConfirm={confirmRemoveItemRow}
+        />
+      )}
+    </DashboardLayout>
+  );
+}
+
+function RemoveRowConfirm({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal opened onClose={onCancel} title="Remove Row" centered>
+      <Text size="sm" mb="lg">
+        Are you sure you want to remove this line item? This cannot be undone.
+      </Text>
+      <Group justify="flex-end">
+        <CommonButton variant="default" onClick={onCancel}>
+          Cancel
+        </CommonButton>
+        <CommonButton color="var(--destructive)" onClick={onConfirm}>
+          Remove
+        </CommonButton>
+      </Group>
+    </Modal>
+  );
+}
