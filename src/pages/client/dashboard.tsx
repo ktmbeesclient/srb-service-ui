@@ -1,223 +1,218 @@
 import React, { useState } from "react";
-import { useRouter } from "next/router";
-
+import DashboardLayout from "@/layouts/DashboardLayout";
+import { UserRolesEnum } from "@/utils/enums/enum";
+import { Paper, Flex, Table, Group, Skeleton } from "@mantine/core";
 import {
-  TextInput,
-  PasswordInput,
-  Button,
-  Paper,
-  Title,
-  Container,
-  Text,
-  Stack,
-} from "@mantine/core";
-import { ShieldCheck, Hash, Lock } from "lucide-react";
-
-import { setCookie } from "cookies-next";
-import { decodeAccessToken } from "@/utils/jwt";
-import Image from "next/image";
-import { ApiLogin } from "../../../apis/auth";
+  CommonHeading,
+  CommonSearch,
+  CommonFilter,
+  CommonTable,
+  CommonBadge,
+  CommonPagination,
+  CommonButton,
+} from "@/components/common";
+import { Download } from "lucide-react";
+import { ApiGetActiveTransaction } from "../../../apis/transaction";
+import { exportTransactionsPDF } from "../../../apis/export-transaction";
 import showNotify from "@/utils/notify";
-import { Controller, useForm } from "react-hook-form";
 
+interface Transaction {
+  transaction_id: string;
+  client_id: string;
+  transaction_type: string;
+  transaction_date: string;
+  invoice_no: number;
+  pan_no: number;
+  party: string;
+  amount: number;
+  taxable: number;
+  non_taxable: number;
+  vat: number;
+  vat_amount: number;
+  grand_total: number;
+  debit_invoice_no: number;
+  credit_invoice_no: number;
+  status: boolean;
+  import: boolean;
+  capital: boolean;
+  created_at: string;
+}
 
-type LoginFormValues = {
-  panNumber: string;
-  password: string;
-};
-
-export default function Login() {
+export default function ClientDashboard() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [totalPages, setTotalPages] = useState(1);
 
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormValues>({
-    defaultValues: {
-      panNumber: "",
-      password: "",
-    },
-    mode: "onSubmit",
-  });
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>();
 
-  const handleLogin = async (values: LoginFormValues) => {
-    setLoading(true);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 4;
 
-    try {
-      const res = await ApiLogin({
-        pan_number: parseInt(values.panNumber),
-        password: values.password,
-      });
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
-      const accessToken = res.data.data.access_token;
-      const refreshToken = res.data.data.refresh_token;
+  React.useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true);
 
-      setCookie("access_token", accessToken);
-      setCookie("refresh_token", refreshToken);
+        const res: any = await ApiGetActiveTransaction({
+          page,
+          page_size: itemsPerPage,
+          search,
+          category: typeFilter,
+        });
 
-      const payload = decodeAccessToken(accessToken);
+        const payload = res?.data ?? res;
 
-      setCookie("client_id", payload.client_id);
-      setCookie("client_role", payload.client_role);
-
-      if (payload.client_role === "SUPER-ADMIN") {
-        router.push("/admin/clients");
-      } else if (payload.client_role === "CLIENT") {
-        router.push("/client/dashboard");
-      } else {
-        router.push("/login");
+        setTransactions(payload.transactions || []);
+        setTotalPages(
+          Math.ceil(
+            (payload.metadata?.Total || 0) /
+              (payload.metadata?.PageSize || itemsPerPage),
+          ),
+        );
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err: any) {
-      console.error(err);
+    };
 
-      const apiMessage = err?.response?.data?.message;
-      const message =
-        typeof apiMessage === "string" && apiMessage.trim().length > 0
-          ? apiMessage
-          : "Login failed. Please check your PAN number and password.";
+    fetchTransactions();
+  }, [page, search, typeFilter]);
 
-      showNotify("error", message);
+  React.useEffect(() => {
+    setPage(1);
+  }, [search, typeFilter]);
+
+  const handleExportPDF = async () => {
+    try {
+      setIsExportingPDF(true);
+
+      // No page/pageSize — backend exports every row matching the
+      // current search/type filters, not just what's on screen.
+      // No clientId — the backend auth middleware pins CLIENT-role
+      // exports to the caller's own client_id automatically.
+      await exportTransactionsPDF({
+        search: search || undefined,
+        types: typeFilter ? [typeFilter] : undefined,
+      });
+    } catch (error: any) {
+      console.error("Failed to export PDF:", error);
+      showNotify(
+        "error",
+        error?.message || "Failed to export transactions. Please try again.",
+      );
     } finally {
-      setLoading(false);
+      setIsExportingPDF(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-[#f8f7f2] via-[#f2f1ea] to-[#ebe8db] flex items-center justify-center px-4 py-8">
-      <Container size={420} className="w-full">
-        <Paper
-          withBorder
-          shadow="xl"
-          radius="lg"
-          p={36}
-          style={{
-            backgroundColor: "#ffffff",
-            borderColor: "#e5e7eb",
-          }}
+    <DashboardLayout role={UserRolesEnum.CLIENT}>
+      <Group justify="space-between" align="flex-start" mb="md">
+        <CommonHeading
+          title="My Transactions"
+          description="View and filter your transaction history."
+        />
+        <CommonButton
+          variant="light"
+          leftSection={<Download size={16} />}
+          onClick={handleExportPDF}
+          loading={isExportingPDF}
+          disabled={transactions.length === 0}
         >
-          <Stack align="center" gap="xs">
-            <div className="relative w-22.5 h-22.5 flex items-center justify-center">
-              <Image
-                src="/srbservices.png"
-                alt="SRB Services"
-                width={100}
-                height={90}
-                className="object-contain"
-                priority
-              />
-            </div>
+          Export PDF
+        </CommonButton>
+      </Group>
 
-            {/* <div className="text-center mt-2">
-              <Title order={2} fw={800} className="text-slate-800 tracking-tight">
-                Welcome Back
-              </Title>
-              <Text c="dimmed" size="xs" mt={4} fw={500}>
-                Secure Billing & VAT Management System
-              </Text>
-            </div> */}
-          </Stack>
+      <Paper withBorder shadow="sm" p="md" mb="xl" radius="md">
+        <Flex
+          gap="md"
+          justify="space-between"
+          direction={{ base: "column", md: "row" }}
+        >
+          <CommonSearch
+            placeholder="Search by Invoice, Particulars, or PAN/VAT..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <CommonFilter
+            value={typeFilter || ""}
+            onChange={setTypeFilter}
+            allLabel="All Types"
+            options={[
+              { label: "Sale", value: "SALES" },
+              { label: "Purchase", value: "PURCHASE" },
+              { label: "Sales Return", value: "SALES_RETURN" },
+              { label: "Purchase Return", value: "PURCHASE_RETURN" },
+            ]}
+          />
+        </Flex>
+      </Paper>
 
-          <form onSubmit={handleSubmit(handleLogin)} className="mt-8 space-y-4">
-            <Controller
-              name="panNumber"
-              control={control}
-              rules={{
-                required: "PAN number is required",
-                pattern: {
-                  value: /^[0-9]+$/,
-                  message: "PAN number must contain digits only",
-                },
-              }}
-              render={({ field }) => (
-                <TextInput
-                  {...field}
-                  label="PAN Number"
-                  placeholder="Enter PAN Number"
-                  required
-                  radius="md"
-                  size="md"
-                  error={errors.panNumber?.message}
-                  leftSection={<Hash size={16} color="#64748b" />}
-                  styles={{
-                    label: {
-                      color: "#1e293b",
-                      fontWeight: 600,
-                    },
-                    input: {
-                      backgroundColor: "#ffffff",
-                      color: "#111827",
-                      borderColor: "#d1d5db",
-                    },
-                  }}
-                />
-              )}
-            />
-
-            <Controller
-              name="password"
-              control={control}
-              rules={{
-                required: "Password is required",
-                minLength: {
-                  value: 4,
-                  message: "Password must be at least 4 characters",
-                },
-              }}
-              render={({ field }) => (
-                <PasswordInput
-                  {...field}
-                  label="Password"
-                  placeholder="Enter Password"
-                  required
-                  radius="md"
-                  size="md"
-                  error={errors.password?.message}
-                  leftSection={<Lock size={16} color="#64748b" />}
-                  styles={{
-                    label: {
-                      color: "#1e293b",
-                      fontWeight: 600,
-                    },
-                    input: {
-                      backgroundColor: "#ffffff",
-                      color: "#111827",
-                      borderColor: "#d1d5db",
-                    },
-                    innerInput: {
-                      color: "#111827",
-                    },
-                    visibilityToggle: {
-                      color: "#64748b",
-                    },
-                  }}
-                />
-              )}
-            />
-
-            <Button
-              fullWidth
-              mt="xl"
-              type="submit"
-              loading={loading}
-              radius="md"
-              size="md"
-              color="green"
-              className="bg-emerald-600 hover:bg-emerald-700 transition-colors"
-            >
-              Sign In
-            </Button>
-          </form>
-
-          <div className="flex items-center justify-center gap-1.5 mt-8 text-slate-400">
-            <ShieldCheck size={14} className="text-emerald-600" />
-            <Text size="xs" c="dimmed" ta="center" className="select-none">
-              © {new Date().getFullYear()} SRB Services • Secure Portal
-            </Text>
+      <Paper withBorder shadow="sm" radius="md">
+        {loading ? (
+          <div style={{ padding: 16 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} height={32} mb="sm" radius="sm" />
+            ))}
           </div>
-        </Paper>
-      </Container>
-    </div>
+        ) : (
+          <CommonTable
+            headers={[
+              "Date",
+              "Type",
+              "Invoice No.",
+              "Particulars",
+              "PAN/VAT",
+              "Amount",
+              "Taxable Amount",
+              "Non Taxable Amount",
+              "Tax",
+              "Total",
+            ]}
+            isEmpty={transactions.length === 0}
+            emptyMessage="No transactions found."
+          >
+            {transactions.map((tx) => (
+              <Table.Tr key={tx.transaction_id}>
+                <Table.Td>{tx.transaction_date?.split("T")[0]}</Table.Td>
+
+                <Table.Td>
+                  <CommonBadge
+                    color={
+                      tx.transaction_type === "SALES"
+                        ? "var(--chart-2)"
+                        : "var(--primary)"
+                    }
+                  >
+                    {tx.transaction_type}
+                  </CommonBadge>
+                </Table.Td>
+
+                <Table.Td>{tx.invoice_no}</Table.Td>
+                <Table.Td>{tx.party}</Table.Td>
+                <Table.Td>{tx.pan_no}</Table.Td>
+                <Table.Td>{tx.amount.toLocaleString()}</Table.Td>
+                <Table.Td>{tx.taxable.toLocaleString()}</Table.Td>
+                <Table.Td>{tx.non_taxable.toLocaleString()}</Table.Td>
+                <Table.Td>{tx.vat_amount.toLocaleString()}</Table.Td>
+                <Table.Td>{tx.grand_total.toLocaleString()}</Table.Td>
+              </Table.Tr>
+            ))}
+          </CommonTable>
+        )}
+
+        {totalPages > 1 && (
+          <CommonPagination
+            total={totalPages}
+            value={page}
+            onChange={setPage}
+          />
+        )}
+      </Paper>
+    </DashboardLayout>
   );
 }

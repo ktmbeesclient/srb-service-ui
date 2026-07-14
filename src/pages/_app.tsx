@@ -6,7 +6,7 @@ import { Inter, Merriweather, JetBrains_Mono } from "next/font/google";
 import Head from "next/head";
 import "@mantine/notifications/styles.css";
 import { Notifications } from "@mantine/notifications";
-
+import "nepali-datepicker-reactjs/dist/index.css";
 const fontSans = Inter({
   subsets: ["latin"],
   variable: "--font-sans",

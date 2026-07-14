@@ -171,4 +171,19 @@
   body {
     @apply bg-background text-foreground;
   }
+  .nepali-date-input {
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+  padding: 6px 10px;
+  height: 36px;
+  font-size: 14px;
+  background: transparent;
+  color: var(--mantine-color-text);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.nepali-date-input:focus {
+  border-color: var(--primary);
+}
 }

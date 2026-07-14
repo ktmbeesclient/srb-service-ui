@@ -112,7 +112,7 @@ export default function DashboardLayout({ children, role }: LayoutProps) {
             >
               {pinned ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </ActionIcon>
-            <Text fw={700} size="lg">Audit Bees</Text>
+            <Text fw={700} size="lg">Srb Services</Text>
           </Group>
           <Group>
             <Text size="sm" c="var(--muted-foreground)" visibleFrom="sm">{role} Portal</Text>

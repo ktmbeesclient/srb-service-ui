@@ -61,6 +61,7 @@ import {
 import { APIActiveFillingPeriod } from "../../../../../apis/filling-period";
 import showNotify from "@/utils/notify";
 import { exportTransactionsExcel, exportTransactionsPDF } from "../../../../../apis/export-transaction";
+import NepaliDatePicker from "@/components/common/NepaliDatePIcker";
 
 function generateRandomPassword(): string {
   const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -633,16 +634,8 @@ const handleExportPDF = async () => {
               Transactions
             </Title>
             <Group gap="md">
-              <TextInput
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.currentTarget.value)}
-              />
-              <TextInput
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.currentTarget.value)}
-              />
+      <NepaliDatePicker placeholder="Start Date" value={startDate} onChange={setStartDate} />
+      <NepaliDatePicker placeholder="End Date" value={endDate} onChange={setEndDate} />
               <CommonButton
                 size="xs"
                 variant="light"

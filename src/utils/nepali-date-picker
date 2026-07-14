@@ -1,0 +1,296 @@
+"use client";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActionIcon, Group, Popover, Select, Text, UnstyledButton } from "@mantine/core";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { ADToBS, BSToAD } from "bikram-sambat-js";
+import {
+  NEPALI_MONTHS,
+  daysInBSMonth,
+  getTodayBS,
+} from "@/utils/helpers/dateFormatter";
+
+type NepaliDatePickerProps = {
+  label?: string;
+  /** Current value as an AD "YYYY-MM-DD" string (matches your API/DB format). Empty string = unset. */
+  value: string;
+  /** Called with an AD "YYYY-MM-DD" string, or "" when cleared. */
+  onChange: (adDate: string) => void;
+  placeholder?: string;
+  error?: string;
+  required?: boolean;
+  minBSYear?: number;
+  maxBSYear?: number;
+  disabled?: boolean;
+};
+
+const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Day-of-week (0=Sun) of the 1st of a given BS month. */
+const firstWeekdayOfBSMonth = (year: number, month: number): number => {
+  const ad = BSToAD(`${year}-${pad(month)}-01`);
+  return new Date(ad).getDay();
+};
+
+export default function NepaliDatePicker({
+  label,
+  value,
+  onChange,
+  placeholder = "Select date",
+  error,
+  required,
+  minBSYear,
+  maxBSYear,
+  disabled,
+}: NepaliDatePickerProps) {
+  const todayBS = useMemo(() => getTodayBS(), []);
+  const [opened, setOpened] = useState(false);
+  const [quickJump, setQuickJump] = useState(false);
+
+  // The BS date currently selected (derived from the AD value prop).
+  const selectedBS = useMemo(() => {
+    if (!value) return null;
+    try {
+      const [y, m, d] = ADToBS(value.split("T")[0]).split("-").map(Number);
+      return { year: y, month: m, day: d };
+    } catch {
+      return null;
+    }
+  }, [value]);
+
+  // The month/year the calendar grid is currently showing.
+  const [viewYear, setViewYear] = useState(selectedBS?.year ?? todayBS.year);
+  const [viewMonth, setViewMonth] = useState(selectedBS?.month ?? todayBS.month);
+
+  useEffect(() => {
+    if (opened) {
+      setViewYear(selectedBS?.year ?? todayBS.year);
+      setViewMonth(selectedBS?.month ?? todayBS.month);
+      setQuickJump(false);
+    }
+  }, [opened]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const lowYear = minBSYear ?? todayBS.year - 10;
+  const highYear = maxBSYear ?? todayBS.year + 5;
+
+  const yearOptions = useMemo(
+    () =>
+      Array.from({ length: highYear - lowYear + 1 }, (_, i) => {
+        const y = lowYear + i;
+        return { value: String(y), label: String(y) };
+      }),
+    [lowYear, highYear],
+  );
+
+  const monthOptions = NEPALI_MONTHS.map((name, idx) => ({
+    value: String(idx + 1),
+    label: name,
+  }));
+
+  const goPrevMonth = () => {
+    if (viewMonth === 1) {
+      setViewMonth(12);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const goNextMonth = () => {
+    if (viewMonth === 12) {
+      setViewMonth(1);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const totalDays = daysInBSMonth(viewYear, viewMonth);
+  const leadingBlanks = firstWeekdayOfBSMonth(viewYear, viewMonth);
+  const cells: (number | null)[] = [
+    ...Array(leadingBlanks).fill(null),
+    ...Array.from({ length: totalDays }, (_, i) => i + 1),
+  ];
+
+  const pickDay = (day: number) => {
+    const bsString = `${viewYear}-${pad(viewMonth)}-${pad(day)}`;
+    onChange(BSToAD(bsString));
+    setOpened(false);
+  };
+
+  const displayLabel = selectedBS
+    ? `${selectedBS.year}-${pad(selectedBS.month)}-${pad(selectedBS.day)} BS`
+    : placeholder;
+
+  return (
+    <div>
+      {label && (
+        <Text size="sm" fw={500} mb={4}>
+          {label}
+          {required && <span style={{ color: "var(--destructive)" }}> *</span>}
+        </Text>
+      )}
+      <Popover opened={opened} onChange={setOpened} position="bottom-start" withArrow shadow="md">
+        <Popover.Target>
+          <UnstyledButton
+            onClick={() => !disabled && setOpened((o) => !o)}
+            disabled={disabled}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              border: `1px solid ${error ? "var(--destructive)" : "var(--mantine-color-default-border)"}`,
+              borderRadius: "var(--mantine-radius-sm)",
+              padding: "6px 10px",
+              minWidth: 160,
+              opacity: disabled ? 0.6 : 1,
+              cursor: disabled ? "not-allowed" : "pointer",
+            }}
+          >
+            <Calendar size={16} color="var(--muted-foreground)" />
+            <Text size="sm" c={selectedBS ? undefined : "var(--muted-foreground)"}>
+              {displayLabel}
+            </Text>
+          </UnstyledButton>
+        </Popover.Target>
+
+        <Popover.Dropdown p="sm" style={{ width: 264 }}>
+          {/* Header: << Ashar 2083 >> — click the label to jump to any month/year */}
+          <Group justify="space-between" mb="sm" wrap="nowrap">
+            <ActionIcon variant="subtle" onClick={goPrevMonth}>
+              <ChevronLeft size={16} />
+            </ActionIcon>
+            <UnstyledButton onClick={() => setQuickJump((q) => !q)}>
+              <Text size="sm" fw={700}>
+                {NEPALI_MONTHS[viewMonth - 1]} {viewYear}
+              </Text>
+            </UnstyledButton>
+            <ActionIcon variant="subtle" onClick={goNextMonth}>
+              <ChevronRight size={16} />
+            </ActionIcon>
+          </Group>
+
+          {quickJump ? (
+            <Group gap={6} mb="sm" wrap="nowrap">
+              <Select
+                data={monthOptions}
+                value={String(viewMonth)}
+                onChange={(v) => v && setViewMonth(Number(v))}
+                w={120}
+                comboboxProps={{ withinPortal: true }}
+              />
+              <Select
+                data={yearOptions}
+                value={String(viewYear)}
+                onChange={(v) => v && setViewYear(Number(v))}
+                w={90}
+                searchable
+                comboboxProps={{ withinPortal: true }}
+              />
+            </Group>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7, 1fr)",
+                  gap: 4,
+                  marginBottom: 4,
+                }}
+              >
+                {WEEKDAYS.map((d, i) => (
+                  <Text
+                    key={`${d}-${i}`}
+                    size="xs"
+                    fw={600}
+                    ta="center"
+                    c={i === 6 ? "var(--destructive)" : "var(--muted-foreground)"}
+                  >
+                    {d}
+                  </Text>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7, 1fr)",
+                  gap: 4,
+                }}
+              >
+                {cells.map((day, idx) => {
+                  if (day === null) return <div key={`blank-${idx}`} />;
+
+                  const isSaturday = (leadingBlanks + day - 1) % 7 === 6;
+                  const isToday =
+                    viewYear === todayBS.year &&
+                    viewMonth === todayBS.month &&
+                    day === todayBS.day;
+                  const isSelected =
+                    !!selectedBS &&
+                    selectedBS.year === viewYear &&
+                    selectedBS.month === viewMonth &&
+                    selectedBS.day === day;
+
+                  return (
+                    <UnstyledButton
+                      key={day}
+                      onClick={() => pickDay(day)}
+                      style={{
+                        height: 30,
+                        borderRadius: "var(--mantine-radius-sm)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 13,
+                        fontWeight: isToday ? 700 : 400,
+                        color: isSelected
+                          ? "var(--primary-foreground)"
+                          : isSaturday
+                            ? "var(--destructive)"
+                            : undefined,
+                        backgroundColor: isSelected ? "var(--primary)" : "transparent",
+                        border: isToday && !isSelected ? "1px solid var(--primary)" : "1px solid transparent",
+                      }}
+                    >
+                      {day}
+                    </UnstyledButton>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <Group justify="space-between" mt="sm">
+            <UnstyledButton
+              onClick={() => {
+                setViewYear(todayBS.year);
+                setViewMonth(todayBS.month);
+                pickDay(todayBS.day);
+              }}
+            >
+              <Text size="xs" c="var(--primary)" fw={600}>
+                Today
+              </Text>
+            </UnstyledButton>
+            <UnstyledButton
+              onClick={() => {
+                onChange("");
+                setOpened(false);
+              }}
+            >
+              <Text size="xs" c="var(--muted-foreground)">
+                Clear
+              </Text>
+            </UnstyledButton>
+          </Group>
+        </Popover.Dropdown>
+      </Popover>
+      {error && (
+        <Text size="xs" c="var(--destructive)" mt={4}>
+          {error}
+        </Text>
+      )}
+    </div>
+  );
+}

@@ -16,8 +16,11 @@ import { FileSpreadsheet } from "lucide-react";
 import { TextInput } from "@mantine/core";
 import { APIGetTransactions } from "../../../apis/transaction";
 import { exportTransactionsExcel } from "../../../apis/export-transaction";
-import showNotify from "@/utils/notify";
-import { types } from "util";
+// import showNotify from "@/utils/notify";
+// import { types } from "util";
+import "nepali-datepicker-reactjs/dist/index.css";
+import NepaliDatePicker from "@/components/common/NepaliDatePIcker";
+
 
 const TYPE_OPTIONS = [
   { label: "Sales", value: "SALES" },
@@ -189,19 +192,9 @@ const handleExportExcel = async () => {
               onChange={(e) => setSearch(e.currentTarget.value)}
             />
           </Box>
-          <Flex gap="md" style={{ flexWrap: "wrap" }}>
-            <TextInput
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.currentTarget.value)}
-              style={{ width: 180 }}
-            />
-            <TextInput
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.currentTarget.value)}
-              style={{ width: 180 }}
-            />
+          <Flex gap="md" style={{ flexWrap: "wrap"}}>
+  <NepaliDatePicker placeholder="Start Date" value={startDate} onChange={setStartDate} />
+<NepaliDatePicker placeholder="End Date" value={endDate} onChange={setEndDate} />
           </Flex>
         </Flex>
         <Flex gap="md" mt="md" align="center" justify="space-between">
