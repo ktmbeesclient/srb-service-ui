@@ -113,15 +113,16 @@ export default function Home() {
 
         {/* Primary Action */}
         <div className="flex flex-col items-center gap-3.5">
-          <button
+          <button 
+          
             onClick={() => router.push("/login")}
-            className="rounded-lg bg-[#1e2a22] px-7 py-3.5 text-[15px] font-semibold text-[#eeece0] shadow-[0_1px_2px_rgba(30,42,34,0.08)] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:bg-[#3c5a44] hover:shadow-[0_6px_20px_rgba(60,90,68,0.2)] active:translate-y-0 active:shadow-[0_1px_2px_rgba(30,42,34,0.1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c08a2e] focus-visible:outline-offset-2"
+            className="rounded-lg bg-[#1e2a22] px-7 py-3.5 text-[15px] font-semibold text-[#eeece0] shadow-[0_1px_2px_rgba(30,42,34,0.08)] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:bg-[#3c5a44] hover:shadow-[0_6px_20px_rgba(60,90,68,0.2)] hover:cursor-pointer active:translate-y-0 active:shadow-[0_1px_2px_rgba(30,42,34,0.1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c08a2e] focus-visible:outline-offset-2"
           >
             Log in to your ledger
           </button>
-          <span className="text-[13px] text-[#7a7a68] font-medium">
+          {/* <span className="text-[13px] text-[#7a7a68] font-medium">
             For super admins and their clients
-          </span>
+          </span> */}
         </div>
       </main>
 

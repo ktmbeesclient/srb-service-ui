@@ -19,6 +19,7 @@ import {
   Stack,
   Badge,
   Menu,
+  Skeleton,
 } from "@mantine/core";
 import {
   APIActiveFillingPeriod,
@@ -35,15 +36,54 @@ type FilingPeriod = {
   status?: boolean | string;
 };
 
+// ---- Skeleton helpers, scoped to this page's list item shapes ----
+function FilingPeriodRowSkeleton() {
+  return (
+    <Paper withBorder p="sm" radius="md">
+      <Group justify="space-between">
+        <Group>
+          <Skeleton height={24} width={24} radius="xl" circle />
+          <Box>
+            <Skeleton height={12} width={120} radius="sm" mb={6} />
+            <Skeleton height={10} width={80} radius="sm" />
+          </Box>
+        </Group>
+        <Group gap="xs">
+          <Skeleton height={20} width={60} radius="sm" />
+          <Skeleton height={28} width={28} radius="sm" />
+        </Group>
+      </Group>
+    </Paper>
+  );
+}
+
+function FiscalYearRowSkeleton() {
+  return (
+    <Group justify="space-between" py={4}>
+      <Group>
+        <Skeleton height={24} width={24} radius="xl" circle />
+        <Box>
+          <Skeleton height={12} width={90} radius="sm" mb={6} />
+          <Skeleton height={10} width={70} radius="sm" />
+        </Box>
+      </Group>
+      <Skeleton height={20} width={20} radius="sm" />
+    </Group>
+  );
+}
+
 export default function SettingsPage() {
   const [filingPeriods, setFilingPeriods] = useState<FilingPeriod[]>([]);
+  const [isLoadingPeriods, setIsLoadingPeriods] = useState(true);
   const [newPeriod, setNewPeriod] = useState("");
   const [activePeriodIds, setActivePeriodIds] = useState<string[]>([]);
   const [activePeriodNames, setActivePeriodNames] = useState<string[]>([]);
+  const [isLoadingActivePeriod, setIsLoadingActivePeriod] = useState(true);
 
   const [fiscalYears, setFiscalYears] = useState<
     { id: string; year: string; vatAmount: number }[]
   >([]);
+  const [isLoadingFiscalYears, setIsLoadingFiscalYears] = useState(true);
 
   const [newFiscalYear, setNewFiscalYear] = useState({
     year: "",
@@ -51,15 +91,19 @@ export default function SettingsPage() {
   });
 
   const getFilingPeriods = async () => {
+    setIsLoadingPeriods(true);
     try {
       const res = await APIGetFillingPeriod();
       setFilingPeriods(res?.data?.data ?? []);
     } catch (err) {
       console.error("Failed to fetch filing periods", err);
+    } finally {
+      setIsLoadingPeriods(false);
     }
   };
 
   const getActivePeriod = async () => {
+    setIsLoadingActivePeriod(true);
     try {
       const res = await APIActiveFillingPeriod();
       const rawActive = res?.data?.data ?? res?.data;
@@ -91,6 +135,8 @@ export default function SettingsPage() {
       setActivePeriodNames(Array.from(new Set(names)));
     } catch (err) {
       console.error("Failed to fetch active period", err);
+    } finally {
+      setIsLoadingActivePeriod(false);
     }
   };
 
@@ -110,6 +156,7 @@ export default function SettingsPage() {
     getFilingPeriods();
     getActivePeriod();
 
+    setIsLoadingFiscalYears(true);
     const storedFiscalYears = localStorage.getItem("fiscalYears");
     if (storedFiscalYears) {
       try {
@@ -125,6 +172,7 @@ export default function SettingsPage() {
       setFiscalYears(initial);
       localStorage.setItem("fiscalYears", JSON.stringify(initial));
     }
+    setIsLoadingFiscalYears(false);
   }, []);
 
   const handleAddPeriod = async (e: React.FormEvent) => {
@@ -195,18 +243,27 @@ export default function SettingsPage() {
             <Title order={3} size="h5">
               VAT Filing Periods
             </Title>
-            <Badge variant="light">{filingPeriods.length} total</Badge>
+            {isLoadingPeriods ? (
+              <Skeleton height={20} width={70} radius="sm" />
+            ) : (
+              <Badge variant="light">{filingPeriods.length} total</Badge>
+            )}
           </Group>
           <Text size="sm" c="var(--muted-foreground)" mb="md">
             Add VAT filing frequencies used when managing clients.
           </Text>
-          <Text size="xs" c="var(--muted-foreground)" mb="md">
-            {activePeriodNames.length > 0
-              ? `Current active periods: ${activePeriodNames.join(", ")}`
-              : activePeriodIds.length > 0
-                ? `${activePeriodIds.length} filing period(s) are active.`
-                : "No active filing period selected."}
-          </Text>
+
+          {isLoadingActivePeriod ? (
+            <Skeleton height={12} width="60%" radius="sm" mb="md" />
+          ) : (
+            <Text size="xs" c="var(--muted-foreground)" mb="md">
+              {activePeriodNames.length > 0
+                ? `Current active periods: ${activePeriodNames.join(", ")}`
+                : activePeriodIds.length > 0
+                  ? `${activePeriodIds.length} filing period(s) are active.`
+                  : "No active filing period selected."}
+            </Text>
+          )}
 
           <form onSubmit={handleAddPeriod}>
             <Group align="flex-end" mb="xl">
@@ -229,82 +286,92 @@ export default function SettingsPage() {
             </Group>
           </form>
 
-          <Stack gap="sm">
-            {filingPeriods.map((period, index) => {
-              const active = isPeriodActive(period);
-              return (
-                <Paper key={period.id} withBorder p="sm" radius="md">
-                  <Group justify="space-between">
-                    <Group>
-                      <ThemeIcon
-                        color="var(--primary)"
-                        size={24}
-                        radius="xl"
-                        variant="light"
-                      >
-                        <Text size="xs" fw={700}>
-                          {index + 1}
-                        </Text>
-                      </ThemeIcon>
-                      <Box>
-                        <Text fw={500}>{period.name}</Text>
-                        <Text size="xs" c="var(--muted-foreground)">
-                          Filing frequency
-                        </Text>
-                      </Box>
-                    </Group>
+          {isLoadingPeriods ? (
+            <Stack gap="sm">
+              <FilingPeriodRowSkeleton />
+              <FilingPeriodRowSkeleton />
+              <FilingPeriodRowSkeleton />
+            </Stack>
+          ) : (
+            <>
+              <Stack gap="sm">
+                {filingPeriods.map((period, index) => {
+                  const active = isPeriodActive(period);
+                  return (
+                    <Paper key={period.id} withBorder p="sm" radius="md">
+                      <Group justify="space-between">
+                        <Group>
+                          <ThemeIcon
+                            color="var(--primary)"
+                            size={24}
+                            radius="xl"
+                            variant="light"
+                          >
+                            <Text size="xs" fw={700}>
+                              {index + 1}
+                            </Text>
+                          </ThemeIcon>
+                          <Box>
+                            <Text fw={500}>{period.name}</Text>
+                            <Text size="xs" c="var(--muted-foreground)">
+                              Filing frequency
+                            </Text>
+                          </Box>
+                        </Group>
 
-                    <Group gap="xs">
-                      <Badge color={active ? "green" : "gray"} variant="light">
-                        {active ? "Active" : "Inactive"}
-                      </Badge>
+                        <Group gap="xs">
+                          <Badge color={active ? "green" : "gray"} variant="light">
+                            {active ? "Active" : "Inactive"}
+                          </Badge>
 
-                      <Menu withinPortal position="bottom-end" shadow="sm">
-                        <Menu.Target>
-                          <ActionIcon variant="subtle" color="gray">
-                            <MoreVertical size={18} />
-                          </ActionIcon>
-                        </Menu.Target>
+                          <Menu withinPortal position="bottom-end" shadow="sm">
+                            <Menu.Target>
+                              <ActionIcon variant="subtle" color="gray">
+                                <MoreVertical size={18} />
+                              </ActionIcon>
+                            </Menu.Target>
 
-                        <Menu.Dropdown>
-                          {!active ? (
-                            <Menu.Item
-                              leftSection={<Check size={14} />}
-                              color="green"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleTogglePeriodStatus(period.id);
-                              }}
-                            >
-                              Set Active
-                            </Menu.Item>
-                          ) : (
-                            <Menu.Item
-                              leftSection={<X size={14} />}
-                              color="red"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleTogglePeriodStatus(period.id);
-                              }}
-                            >
-                              Set Inactive
-                            </Menu.Item>
-                          )}
-                        </Menu.Dropdown>
-                      </Menu>
-                    </Group>
-                  </Group>
-                </Paper>
-              );
-            })}
-          </Stack>
+                            <Menu.Dropdown>
+                              {!active ? (
+                                <Menu.Item
+                                  leftSection={<Check size={14} />}
+                                  color="green"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleTogglePeriodStatus(period.id);
+                                  }}
+                                >
+                                  Set Active
+                                </Menu.Item>
+                              ) : (
+                                <Menu.Item
+                                  leftSection={<X size={14} />}
+                                  color="red"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleTogglePeriodStatus(period.id);
+                                  }}
+                                >
+                                  Set Inactive
+                                </Menu.Item>
+                              )}
+                            </Menu.Dropdown>
+                          </Menu>
+                        </Group>
+                      </Group>
+                    </Paper>
+                  );
+                })}
+              </Stack>
 
-          {filingPeriods.length === 0 && (
-            <Text c="var(--muted-foreground)" ta="center" py="sm">
-              No filing periods added yet.
-            </Text>
+              {filingPeriods.length === 0 && (
+                <Text c="var(--muted-foreground)" ta="center" py="sm">
+                  No filing periods added yet.
+                </Text>
+              )}
+            </>
           )}
         </Paper>
 
@@ -353,50 +420,60 @@ export default function SettingsPage() {
             </Group>
           </form>
 
-          <List spacing="sm" size="sm" center>
-            {fiscalYears.map((fy, index) => (
-              <React.Fragment key={fy.id}>
-                <List.Item
-                  icon={
-                    <ThemeIcon
-                      color="var(--chart-1)"
-                      size={24}
-                      radius="xl"
-                      variant="light"
+          {isLoadingFiscalYears ? (
+            <Stack gap="xs">
+              <FiscalYearRowSkeleton />
+              <Divider my="xs" />
+              <FiscalYearRowSkeleton />
+            </Stack>
+          ) : (
+            <>
+              <List spacing="sm" size="sm" center>
+                {fiscalYears.map((fy, index) => (
+                  <React.Fragment key={fy.id}>
+                    <List.Item
+                      icon={
+                        <ThemeIcon
+                          color="var(--chart-1)"
+                          size={24}
+                          radius="xl"
+                          variant="light"
+                        >
+                          <Text size="xs" fw={700}>
+                            {index + 1}
+                          </Text>
+                        </ThemeIcon>
+                      }
                     >
-                      <Text size="xs" fw={700}>
-                        {index + 1}
-                      </Text>
-                    </ThemeIcon>
-                  }
-                >
-                  <Group justify="space-between">
-                    <Box>
-                      <Text fw={500}>{fy.year}</Text>
-                      <Text size="xs" c="var(--muted-foreground)">
-                        VAT: {fy.vatAmount}%
-                      </Text>
-                    </Box>
+                      <Group justify="space-between">
+                        <Box>
+                          <Text fw={500}>{fy.year}</Text>
+                          <Text size="xs" c="var(--muted-foreground)">
+                            VAT: {fy.vatAmount}%
+                          </Text>
+                        </Box>
 
-                    <ActionIcon
-                      variant="subtle"
-                      color="var(--destructive)"
-                      onClick={() => handleDeleteFiscalYear(fy.id)}
-                    >
-                      <Trash2 size={16} />
-                    </ActionIcon>
-                  </Group>
-                </List.Item>
+                        <ActionIcon
+                          variant="subtle"
+                          color="var(--destructive)"
+                          onClick={() => handleDeleteFiscalYear(fy.id)}
+                        >
+                          <Trash2 size={16} />
+                        </ActionIcon>
+                      </Group>
+                    </List.Item>
 
-                {index < fiscalYears.length - 1 && <Divider my="xs" />}
-              </React.Fragment>
-            ))}
-          </List>
+                    {index < fiscalYears.length - 1 && <Divider my="xs" />}
+                  </React.Fragment>
+                ))}
+              </List>
 
-          {fiscalYears.length === 0 && (
-            <Text c="var(--muted-foreground)" ta="center" py="sm">
-              No fiscal years added yet.
-            </Text>
+              {fiscalYears.length === 0 && (
+                <Text c="var(--muted-foreground)" ta="center" py="sm">
+                  No fiscal years added yet.
+                </Text>
+              )}
+            </>
           )}
         </Paper>
       </SimpleGrid>

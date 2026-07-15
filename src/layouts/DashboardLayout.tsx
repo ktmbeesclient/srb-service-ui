@@ -6,13 +6,14 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { deleteCookie, getCookie } from "cookies-next";
 import { UserRolesEnum } from "@/utils/enums/enum";
-import { Users, FileText, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Users, FileText, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, ReceiptText, ChartNoAxesColumn } from "lucide-react";
 import { ApiLogout } from "../../apis/auth";
+import Image from "next/image";
 
 const COLLAPSED_WIDTH = 72;
 const EXPANDED_WIDTH = 220;
 const MOBILE_WIDTH = 250;
-const HEADER_HEIGHT = 60;
+const HEADER_HEIGHT = 80;
 
 interface LayoutProps {
   children: ReactNode;
@@ -53,8 +54,8 @@ export default function DashboardLayout({ children, role }: LayoutProps) {
   const navItems = role === UserRolesEnum.SUPER_ADMIN
     ? [
       { label: "Clients", href: "/admin/clients", icon: <Users size={20} /> },
-      { label: "All Transactions", href: "/admin/transactions", icon: <FileText size={20} /> },
-      { label: "Reports", href: "/admin/reports", icon: <FileText size={20} /> },
+      { label: "All Transactions", href: "/admin/transactions", icon:<ReceiptText size={20} /> },
+      { label: "Reports", href: "/admin/reports", icon: <ChartNoAxesColumn size={20} />},
       { label: "Settings", href: "/admin/settings", icon: <Settings size={20} /> },
     ]
     : [
@@ -112,7 +113,29 @@ export default function DashboardLayout({ children, role }: LayoutProps) {
             >
               {pinned ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </ActionIcon>
-            <Text fw={700} size="lg">Srb Services</Text>
+            {/* <Text fw={700} size="lg" onClick={() => router.push("/admin/clients")} style={{ cursor: "pointer" }}>
+              Srb Services
+            </Text> */}
+   <>
+  <Image
+    src="/light-theme-logo.png"
+    alt="Srb Services"
+    width={1080}
+    height={1080}
+    priority
+    className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='dark']_&]:hidden"
+    onClick={() => router.push("/admin/clients")}
+  />
+  <Image
+    src="/dark-theme-logo1.png"
+    alt="Srb Services"
+    width={1080}
+    height={1080}
+    priority
+    className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='light']_&]:hidden"
+    onClick={() => router.push("/admin/clients")}
+  />
+</>
           </Group>
           <Group>
             <Text size="sm" c="var(--muted-foreground)" visibleFrom="sm">{role} Portal</Text>

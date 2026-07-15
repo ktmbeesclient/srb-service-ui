@@ -1,7 +1,17 @@
 import React, { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { UserRolesEnum } from "@/utils/enums/enum";
-import { Text, Paper, Flex, Table, Box, Loader, Center } from "@mantine/core";
+import {
+  Text,
+  Paper,
+  Flex,
+  Table,
+  Box,
+  Loader,
+  Center,
+  Skeleton,
+  LoadingOverlay,
+} from "@mantine/core";
 import {
   CommonBadge,
   CommonFilter,
@@ -20,7 +30,6 @@ import { exportTransactionsExcel } from "../../../apis/export-transaction";
 // import { types } from "util";
 import "nepali-datepicker-reactjs/dist/index.css";
 import NepaliDatePicker from "@/components/common/NepaliDatePIcker";
-
 
 const TYPE_OPTIONS = [
   { label: "Sales", value: "SALES" },
@@ -67,6 +76,22 @@ interface Transaction {
   created_at: string;
   import: boolean;
   capital: boolean;
+}
+
+// ---- Skeleton helper, scoped to this table's exact column count ----
+const TABLE_COLS = 10;
+const SKELETON_ROW_COUNT = 4; // matches itemsPerPage below
+
+function TransactionRowSkeleton() {
+  return (
+    <Table.Tr>
+      {Array.from({ length: TABLE_COLS }).map((_, i) => (
+        <Table.Td key={i}>
+          <Skeleton height={14} width={i === 0 ? "80%" : "60%"} radius="sm" />
+        </Table.Td>
+      ))}
+    </Table.Tr>
+  );
 }
 
 export default function AdminTransactions() {
@@ -149,28 +174,32 @@ export default function AdminTransactions() {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  
-const handleExportExcel = async () => {
-  try {
-    setIsExporting(true);
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
 
-    await exportTransactionsExcel({
-      page,
-      pageSize: itemsPerPage,
-      search: debouncedSearch || undefined,
-      types: typeFilter ? [typeFilter] : undefined,
-      startDate: debouncedStartDate || undefined,
-      endDate: debouncedEndDate || undefined,
-      year: "2026/27",
-      vatPeriod: "Consolidated",
-    });
-  } catch (error: any) {
-    console.error("Failed to export Excel:", error);
-    alert(error?.message || "Failed to export Excel");
-  } finally {
-    setIsExporting(false);
-  }
-};
+      await exportTransactionsExcel({
+        page,
+        pageSize: itemsPerPage,
+        search: debouncedSearch || undefined,
+        types: typeFilter ? [typeFilter] : undefined,
+        startDate: debouncedStartDate || undefined,
+        endDate: debouncedEndDate || undefined,
+        year: "2026/27",
+        vatPeriod: "Consolidated",
+      });
+    } catch (error: any) {
+      console.error("Failed to export Excel:", error);
+      alert(error?.message || "Failed to export Excel");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // True only on the very first fetch (no data yet, no error). Subsequent
+  // refetches (search/filter/pagination changes) keep existing rows visible
+  // under a subtle overlay instead of tearing down the whole table.
+  const isInitialLoading = loading && transactions.length === 0 && !error;
 
   return (
     <DashboardLayout role={UserRolesEnum.SUPER_ADMIN}>
@@ -192,9 +221,9 @@ const handleExportExcel = async () => {
               onChange={(e) => setSearch(e.currentTarget.value)}
             />
           </Box>
-          <Flex gap="md" style={{ flexWrap: "wrap"}}>
-  <NepaliDatePicker placeholder="Start Date" value={startDate} onChange={setStartDate} />
-<NepaliDatePicker placeholder="End Date" value={endDate} onChange={setEndDate} />
+          <Flex gap="md" style={{ flexWrap: "wrap" }}>
+            <NepaliDatePicker placeholder="Start Date" value={startDate} onChange={setStartDate} />
+            <NepaliDatePicker placeholder="End Date" value={endDate} onChange={setEndDate} />
           </Flex>
         </Flex>
         <Flex gap="md" mt="md" align="center" justify="space-between">
@@ -217,17 +246,17 @@ const handleExportExcel = async () => {
         </Flex>
       </Paper>
 
-      <Paper withBorder radius="md">
-        {loading ? (
-          <Center py="xl">
-            <Loader size="sm" />
-          </Center>
-        ) : error ? (
+      <Paper withBorder radius="md" pos="relative">
+        {error ? (
           <Center py="xl">
             <Text c="var(--destructive)">{error}</Text>
           </Center>
         ) : (
           <>
+            {/* Overlay only for background refetches once rows already
+                exist, so existing data stays visible instead of flashing
+                to a skeleton or spinner on every search keystroke/filter. */}
+            <LoadingOverlay visible={loading && transactions.length > 0} />
             <CommonTable
               headers={[
                 "Client",
@@ -241,31 +270,35 @@ const handleExportExcel = async () => {
                 "Tax",
                 "Total",
               ]}
-              isEmpty={transactions.length === 0}
+              isEmpty={!isInitialLoading && !loading && transactions.length === 0}
               emptyMessage="No transactions found."
             >
-              {transactions.map((t) => (
-                <Table.Tr key={t.transaction_id}>
-                  <Table.Td>
-                    <Text fw={500}>{t.client_name}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {new Date(t.transaction_date).toLocaleDateString()}
-                  </Table.Td>
-                  <Table.Td>
-                    <CommonBadge color={getBadgeColor(t.transaction_type)}>
-                      {typeLabel(t.transaction_type)}
-                    </CommonBadge>
-                  </Table.Td>
-                  <Table.Td>{t.invoice_no}</Table.Td>
-                  <Table.Td>{t.party}</Table.Td>
-                  <Table.Td>{t.amount.toLocaleString()}</Table.Td>
-                  <Table.Td>{t.taxable.toLocaleString()}</Table.Td>
-                  <Table.Td>{t.non_taxable.toLocaleString()}</Table.Td>
-                  <Table.Td>{t.vat_amount.toLocaleString()}</Table.Td>
-                  <Table.Td>{t.grand_total.toLocaleString()}</Table.Td>
-                </Table.Tr>
-              ))}
+              {isInitialLoading
+                ? Array.from({ length: SKELETON_ROW_COUNT }).map((_, i) => (
+                    <TransactionRowSkeleton key={i} />
+                  ))
+                : transactions.map((t) => (
+                    <Table.Tr key={t.transaction_id}>
+                      <Table.Td>
+                        <Text fw={500}>{t.client_name}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        {new Date(t.transaction_date).toLocaleDateString()}
+                      </Table.Td>
+                      <Table.Td>
+                        <CommonBadge color={getBadgeColor(t.transaction_type)}>
+                          {typeLabel(t.transaction_type)}
+                        </CommonBadge>
+                      </Table.Td>
+                      <Table.Td>{t.invoice_no}</Table.Td>
+                      <Table.Td>{t.party}</Table.Td>
+                      <Table.Td>{t.amount.toLocaleString()}</Table.Td>
+                      <Table.Td>{t.taxable.toLocaleString()}</Table.Td>
+                      <Table.Td>{t.non_taxable.toLocaleString()}</Table.Td>
+                      <Table.Td>{t.vat_amount.toLocaleString()}</Table.Td>
+                      <Table.Td>{t.grand_total.toLocaleString()}</Table.Td>
+                    </Table.Tr>
+                  ))}
             </CommonTable>
             {total > itemsPerPage && (
               <CommonPagination

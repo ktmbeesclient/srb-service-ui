@@ -5,6 +5,7 @@
 :root {
   --background: oklch(0.9842 0.0034 247.8575);
   --foreground: oklch(0.2795 0.0368 260.0310);
+  --foreground: #111827;
   --card: oklch(1.0000 0 0);
   --card-foreground: oklch(0.2795 0.0368 260.0310);
   --popover: oklch(1.0000 0 0);
@@ -185,5 +186,60 @@
 
 .nepali-date-input:focus {
   border-color: var(--primary);
+}
+/*
+ * Overrides for nepali-datepicker-reactjs.
+ * The library's popup (.calender, nested inside .nepali-date-picker) ships
+ * with `background:#fff` at full opacity but only a very faint box-shadow
+ * (0 2px 6px rgba(0,0,0,0.1)), which reads as washed-out / low-contrast on
+ * a dark page. This forces a solid background, a visible border, a much
+ * stronger shadow, and a high z-index so it always renders crisply above
+ * everything else (table cells, modals, etc).
+ *
+ * Import this AFTER "nepali-datepicker-reactjs/dist/index.css" so these
+ * rules win without needing excessive specificity hacks elsewhere.
+ */
+
+.nepali-date-picker {
+  /* Leave room for our calendar icon button inside the input. */
+  width: 100%;
+}
+
+.nepali-date-picker .nepali-date-input,
+.nepali-date-picker input {
+  padding-right: 32px !important;
+  cursor: pointer;
+  background: transparent;
+}
+
+.nepali-date-picker .calender {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  z-index: 10000 !important;
+position: absolute !important;
+  top: 100% !important;
+  bottom: auto !important;
+  margin-top: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Dropdowns (month/year pickers) inside the calendar get the same treatment. */
+.nepali-date-picker .calender .control .drop-down {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35) !important;
+  z-index: 10001 !important;
+}
+/* Force Mantine notification text to be dark */
+.mantine-Notification-root .mantine-Notification-description,
+.mantine-Notification-root .mantine-Notification-title,
+.mantine-Notification-root .mantine-Notification-body {
+  color: #171717 !important;
+  opacity: 1 !important;
 }
 }

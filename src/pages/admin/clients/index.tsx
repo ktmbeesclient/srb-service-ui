@@ -30,6 +30,7 @@ import {
   Table,
   LoadingOverlay,
   Badge,
+  Skeleton,
 } from "@mantine/core";
 import {
   CommonHeading,
@@ -90,6 +91,35 @@ type ClientRow = {
 };
 
 type FilingPeriod = { id: string; name: string };
+
+// ---- Skeleton helpers, scoped to this page's exact table/card shape ----
+const STAT_CARD_COUNT = 4;
+const TABLE_COLS = 6;
+const SKELETON_ROW_COUNT = 5;
+
+function StatCardSkeleton() {
+  return (
+    <Paper withBorder p="md" radius="md">
+      <Group justify="space-between" align="center" mb="xs">
+        <Skeleton height={12} width="60%" radius="sm" />
+        <Skeleton height={18} width={18} radius="sm" circle />
+      </Group>
+      <Skeleton height={24} width="40%" radius="sm" />
+    </Paper>
+  );
+}
+
+function ClientTableRowSkeleton() {
+  return (
+    <Table.Tr>
+      {Array.from({ length: TABLE_COLS }).map((_, i) => (
+        <Table.Td key={i}>
+          <Skeleton height={14} width={i === TABLE_COLS - 1 ? 90 : "70%"} radius="sm" />
+        </Table.Td>
+      ))}
+    </Table.Tr>
+  );
+}
 
 export default function AdminClients() {
   const [mounted, setMounted] = useState(false);
@@ -306,28 +336,28 @@ export default function AdminClients() {
     setFormErrors({});
     setIsModalOpen(true);
   };
-const handleDeactivate = async (client: ClientRow) => {
-  const previousIsActive = client.isActive;
+  const handleDeactivate = async (client: ClientRow) => {
+    const previousIsActive = client.isActive;
 
-  setDeletingId(client.id);
-  setClientActiveStatus(client.id, false);
+    setDeletingId(client.id);
+    setClientActiveStatus(client.id, false);
 
-  try {
-    const res = await ApiDeleteClientById(client.id);
-    throwIfApiError(res);
+    try {
+      const res = await ApiDeleteClientById(client.id);
+      throwIfApiError(res);
 
-    applyStatusFromResponse(client.id, res, false);
+      applyStatusFromResponse(client.id, res, false);
 
-    notifySuccess("Client deactivated successfully.");
-  } catch (e) {
-    setClientActiveStatus(client.id, previousIsActive);
-    console.error("Error deactivating client", e);
-    notifyError(extractErrorMessage(e, "Failed to deactivate client."));
-  } finally {
-    setDeletingId(null);
-    fetchClients();
-  }
-};
+      notifySuccess("Client deactivated successfully.");
+    } catch (e) {
+      setClientActiveStatus(client.id, previousIsActive);
+      console.error("Error deactivating client", e);
+      notifyError(extractErrorMessage(e, "Failed to deactivate client."));
+    } finally {
+      setDeletingId(null);
+      fetchClients();
+    }
+  };
 
   const setClientActiveStatus = (id: string, isActive: boolean) => {
     setClients((prev) =>
@@ -356,11 +386,11 @@ const handleDeactivate = async (client: ClientRow) => {
     try {
       const res = await ApiDeleteClientById(client.id);
       throwIfApiError(res);
-     const nowActive = applyStatusFromResponse(
-  client.id,
-  res,
-  !previousIsActive
-);
+      const nowActive = applyStatusFromResponse(
+        client.id,
+        res,
+        !previousIsActive,
+      );
       notifySuccess(
         nowActive
           ? "Client reactivated successfully."
@@ -393,6 +423,11 @@ const handleDeactivate = async (client: ClientRow) => {
   );
   const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
 
+  // True only on the very first fetch (no data yet) — shows skeleton instead
+  // of an empty table. Subsequent refetches (page/search/filter change) keep
+  // existing rows visible under the LoadingOverlay so nothing flashes blank.
+  const isInitialLoading = isLoading && clients.length === 0 && !loadError;
+
   return (
     <DashboardLayout role={UserRolesEnum.SUPER_ADMIN}>
       <Group justify="space-between" mb="lg">
@@ -417,50 +452,58 @@ const handleDeactivate = async (client: ClientRow) => {
       </Group>
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} mb="lg">
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="sm" c="var(--muted-foreground)" fw={500}>
-              Total Clients
-            </Text>
-            <Users size={18} color="var(--muted-foreground)" />
-          </Group>
-          <Text size="xl" fw={700}>
-            {total}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="sm" c="var(--muted-foreground)" fw={500}>
-              Monthly Filings
-            </Text>
-            <CalendarDays size={18} color="var(--muted-foreground)" />
-          </Group>
-          <Text size="xl" fw={700}>
-            {clients.filter((c) => c.vatPeriod === "Monthly").length}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="sm" c="var(--muted-foreground)" fw={500}>
-              Trimester Filings
-            </Text>
-            <CalendarRange size={18} color="var(--muted-foreground)" />
-          </Group>
-          <Text size="xl" fw={700}>
-            {clients.filter((c) => c.vatPeriod === "Trimester").length}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="sm" c="var(--muted-foreground)" fw={500}>
-              Pending This Month
-            </Text>
-            <AlertCircle size={18} color="var(--chart-3)" />
-          </Group>
-          <Text size="xl" fw={700} c="orange">
-            12
-          </Text>
-        </Paper>
+        {isInitialLoading ? (
+          Array.from({ length: STAT_CARD_COUNT }).map((_, i) => (
+            <StatCardSkeleton key={i} />
+          ))
+        ) : (
+          <>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="sm" c="var(--muted-foreground)" fw={500}>
+                  Total Clients
+                </Text>
+                <Users size={18} color="var(--muted-foreground)" />
+              </Group>
+              <Text size="xl" fw={700}>
+                {total}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="sm" c="var(--muted-foreground)" fw={500}>
+                  Monthly Filings
+                </Text>
+                <CalendarDays size={18} color="var(--muted-foreground)" />
+              </Group>
+              <Text size="xl" fw={700}>
+                {clients.filter((c) => c.vatPeriod === "Monthly").length}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="sm" c="var(--muted-foreground)" fw={500}>
+                  Trimester Filings
+                </Text>
+                <CalendarRange size={18} color="var(--muted-foreground)" />
+              </Group>
+              <Text size="xl" fw={700}>
+                {clients.filter((c) => c.vatPeriod === "Trimester").length}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="sm" c="var(--muted-foreground)" fw={500}>
+                  Pending This Month
+                </Text>
+                <AlertCircle size={18} color="var(--chart-3)" />
+              </Group>
+              <Text size="xl" fw={700} c="orange">
+                12
+              </Text>
+            </Paper>
+          </>
+        )}
       </SimpleGrid>
 
       <Paper withBorder p="md" mb="lg" radius="md">
@@ -473,6 +516,7 @@ const handleDeactivate = async (client: ClientRow) => {
             placeholder="Search by Name, PAN, or Address..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 mr-80"
           />
           <CommonFilter
             value={vatFilter || ""}
@@ -487,7 +531,9 @@ const handleDeactivate = async (client: ClientRow) => {
       </Paper>
 
       <Paper withBorder radius="md" pos="relative">
-        <LoadingOverlay visible={isLoading} />
+        {/* Overlay only for background refetches once we already have rows,
+            so existing data stays visible instead of flashing to a skeleton. */}
+        <LoadingOverlay visible={isLoading && clients.length > 0} />
         {loadError && (
           <Text size="sm" c="var(--destructive)" p="md">
             {loadError}
@@ -502,71 +548,75 @@ const handleDeactivate = async (client: ClientRow) => {
             "Status",
             "Actions",
           ]}
-          isEmpty={!isLoading && clients.length === 0}
+          isEmpty={!isLoading && !isInitialLoading && clients.length === 0}
           emptyMessage="No clients found."
         >
-          {clients.map((client) => (
-            <Table.Tr key={client.id}>
-              <Table.Td>
-                <Text fw={500}>{client.name}</Text>
-              </Table.Td>
-              <Table.Td>{client.pan}</Table.Td>
-              <Table.Td>{client.address}</Table.Td>
-              <Table.Td>{client.vatPeriod}</Table.Td>
-              <Table.Td>
-                <Badge
-                  color={
-                    client.isActive
-                      ? "var(--chart-1)"
-                      : "var(--muted-foreground)"
-                  }
-                  variant="light"
-                >
-                  {client.isActive ? "Active" : "Inactive"}
-                </Badge>
-              </Table.Td>
-              <Table.Td>
-                <Group gap="xs">
-                  <Eye
-                    size={16}
-                    onClick={() =>
-                      router.push(`/admin/clients/${client?.slug}`)
-                    }
-                  />
-                  <ActionIcon
-                    variant="light"
-                    color="var(--chart-3)"
-                    onClick={() => handleEditClient(client)}
-                  >
-                    <Edit size={16} />
-                  </ActionIcon>
-                  {client.isActive ? (
-                    <Tooltip label="Deactivate client">
+          {isInitialLoading
+            ? Array.from({ length: SKELETON_ROW_COUNT }).map((_, i) => (
+                <ClientTableRowSkeleton key={i} />
+              ))
+            : clients.map((client) => (
+                <Table.Tr key={client.id}>
+                  <Table.Td>
+                    <Text fw={500}>{client.name}</Text>
+                  </Table.Td>
+                  <Table.Td>{client.pan}</Table.Td>
+                  <Table.Td>{client.address}</Table.Td>
+                  <Table.Td>{client.vatPeriod}</Table.Td>
+                  <Table.Td>
+                    <Badge
+                      color={
+                        client.isActive
+                          ? "var(--chart-1)"
+                          : "var(--muted-foreground)"
+                      }
+                      variant="light"
+                    >
+                      {client.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap="xs">
+                      <Eye
+                        size={16}
+                        onClick={() =>
+                          router.push(`/admin/clients/${client?.slug}`)
+                        }
+                      />
                       <ActionIcon
                         variant="light"
-                        color="var(--destructive)"
-                        loading={deletingId === client.id}
-                        onClick={() => handleDeactivate(client)}
+                        color="var(--chart-3)"
+                        onClick={() => handleEditClient(client)}
                       >
-                        <Trash2 size={16} />
+                        <Edit size={16} />
                       </ActionIcon>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip label="Reactivate client">
-                      <ActionIcon
-                        variant="light"
-                        color="var(--chart-1)"
-                        loading={deletingId === client.id}
-                        onClick={() => handleReactivate(client)}
-                      >
-                        <RotateCcw size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                </Group>
-              </Table.Td>
-            </Table.Tr>
-          ))}
+                      {client.isActive ? (
+                        <Tooltip label="Deactivate client">
+                          <ActionIcon
+                            variant="light"
+                            color="var(--destructive)"
+                            loading={deletingId === client.id}
+                            onClick={() => handleDeactivate(client)}
+                          >
+                            <Trash2 size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip label="Reactivate client">
+                          <ActionIcon
+                            variant="light"
+                            color="var(--chart-1)"
+                            loading={deletingId === client.id}
+                            onClick={() => handleReactivate(client)}
+                          >
+                            <RotateCcw size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
         </CommonTable>
         {total > itemsPerPage && (
           <CommonPagination

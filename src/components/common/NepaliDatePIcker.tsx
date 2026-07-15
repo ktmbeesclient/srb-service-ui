@@ -100,6 +100,7 @@ export default function NepaliDatePicker({
               color: "var(--muted-foreground)",
               fontSize: 14,
               pointerEvents: "none",
+              zIndex: 50,
             }}
           >
             {placeholder}

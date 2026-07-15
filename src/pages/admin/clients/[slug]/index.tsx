@@ -35,6 +35,7 @@ import {
   NumberInput,
   Box,
   Table,
+  Skeleton,
 } from "@mantine/core";
 import {
   CommonTable,
@@ -118,6 +119,35 @@ const normalizeFilingPeriods = (payload: any): FilingPeriod[] => {
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
 
+// ---- Skeleton helpers, scoped to this page's exact layout ----
+const STAT_CARD_COUNT = 6;
+const TABLE_COLS = 11;
+const SKELETON_ROW_COUNT = 5;
+
+function StatCardSkeleton() {
+  return (
+    <Paper withBorder p="md" radius="md">
+      <Group justify="space-between" align="center" mb="xs">
+        <Skeleton height={10} width="60%" radius="sm" />
+        <Skeleton height={16} width={16} radius="sm" circle />
+      </Group>
+      <Skeleton height={22} width="50%" radius="sm" />
+    </Paper>
+  );
+}
+
+function TransactionRowSkeleton() {
+  return (
+    <Table.Tr>
+      {Array.from({ length: TABLE_COLS }).map((_, i) => (
+        <Table.Td key={i}>
+          <Skeleton height={14} width={i === TABLE_COLS - 1 ? 60 : "70%"} radius="sm" />
+        </Table.Td>
+      ))}
+    </Table.Tr>
+  );
+}
+
 export default function ClientDetail() {
   const router = useRouter();
   const { slug } = router.query;
@@ -125,6 +155,7 @@ export default function ClientDetail() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [clientLoading, setClientLoading] = useState(true);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [page, setPage] = useState(1);
@@ -152,33 +183,38 @@ export default function ClientDetail() {
 
     if (!slug) return;
 
-    const res = await ApiGetClientBySlug(slug);
+    setClientLoading(true);
+    try {
+      const res = await ApiGetClientBySlug(slug);
 
-    if (res?.data?.success) {
-      const client = res.data.data;
-      const vatPeriodId = String(
-        client.vat_filing_period_id ??
-          client.period_id ??
-          client.filing_period_id ??
-          "",
-      );
-      const vatPeriodName = String(
-        client.period_name ??
-          client.vat_filing_period_name ??
-          client.filing_period_name ??
-          "",
-      );
+      if (res?.data?.success) {
+        const client = res.data.data;
+        const vatPeriodId = String(
+          client.vat_filing_period_id ??
+            client.period_id ??
+            client.filing_period_id ??
+            "",
+        );
+        const vatPeriodName = String(
+          client.period_name ??
+            client.vat_filing_period_name ??
+            client.filing_period_name ??
+            "",
+        );
 
-      setClientData({
-        id: client.id,
-        name: client.name,
-        slug: client.slug,
-        pan: String(client.pan_no),
-        address: client.address,
-        password: "",
-        vatFilingPeriodId: vatPeriodId,
-        vatFilingPeriodName: vatPeriodName,
-      });
+        setClientData({
+          id: client.id,
+          name: client.name,
+          slug: client.slug,
+          pan: String(client.pan_no),
+          address: client.address,
+          password: "",
+          vatFilingPeriodId: vatPeriodId,
+          vatFilingPeriodName: vatPeriodName,
+        });
+      }
+    } finally {
+      setClientLoading(false);
     }
   };
   const fetchFilingPeriod = async () => {
@@ -401,52 +437,52 @@ export default function ClientDetail() {
       setDeleteTxId(null);
     }
   };
-const handleExportExcel = async () => {
-  try {
-    setIsExporting(true);
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
 
-    await exportTransactionsExcel({
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      clientId: clientData.id,
-      vatPeriod:
-        filingPeriods.find((p) => p.id === clientData.vatFilingPeriodId)
-          ?.name ?? clientData.vatFilingPeriodName,
-    });
-  } catch (error: any) {
-    console.error("Failed to export Excel:", error);
-    showNotify(
-      "error",
-      error?.message || "Failed to export transactions. Please try again."
-    );
-  } finally {
-    setIsExporting(false);
-  }
-};
+      await exportTransactionsExcel({
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        clientId: clientData.id,
+        vatPeriod:
+          filingPeriods.find((p) => p.id === clientData.vatFilingPeriodId)
+            ?.name ?? clientData.vatFilingPeriodName,
+      });
+    } catch (error: any) {
+      console.error("Failed to export Excel:", error);
+      showNotify(
+        "error",
+        error?.message || "Failed to export transactions. Please try again."
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-// Add this handler inside your React component where your export buttons live
-const handleExportPDF = async () => {
-  try {
-    setIsExportingPDF(true);
+  // Add this handler inside your React component where your export buttons live
+  const handleExportPDF = async () => {
+    try {
+      setIsExportingPDF(true);
 
-    await exportTransactionsPDF({
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      clientId: clientData.id,
-      vatPeriod:
-        filingPeriods.find((p) => p.id === clientData.vatFilingPeriodId)
-          ?.name ?? clientData.vatFilingPeriodName,
-    });
-  } catch (error: any) {
-    console.error("Failed to export PDF:", error);
-    showNotify(
-      "error",
-      error?.message || "Failed to export transactions. Please try again."
-    );
-  } finally {
-    setIsExportingPDF(false);
-  }
-};
+      await exportTransactionsPDF({
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        clientId: clientData.id,
+        vatPeriod:
+          filingPeriods.find((p) => p.id === clientData.vatFilingPeriodId)
+            ?.name ?? clientData.vatFilingPeriodName,
+      });
+    } catch (error: any) {
+      console.error("Failed to export PDF:", error);
+      showNotify(
+        "error",
+        error?.message || "Failed to export transactions. Please try again."
+      );
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
   const totalSales = transactions
     .filter((t) => t.type === "Sales")
     .reduce((acc, t) => acc + t.amount, 0);
@@ -478,6 +514,12 @@ const handleExportPDF = async () => {
 
   const netVat = salesTax - salesReturnTax - (purchaseTax - purchaseReturnTax);
 
+  // First load only (no data yet) — shows skeletons instead of empty/zeroed
+  // UI. Subsequent refetches (pagination, date filter changes) keep existing
+  // data visible while `loading` is true, so nothing flashes blank.
+  const isStatsLoading = clientLoading || (loading && transactions.length === 0);
+  const isTableInitialLoading = loading && transactions.length === 0;
+
   return (
     <DashboardLayout role={UserRolesEnum.SUPER_ADMIN}>
       <Box mb="xl">
@@ -493,29 +535,42 @@ const handleExportPDF = async () => {
         </CommonButton>
         <Group justify="space-between" align="flex-end">
           <Box>
-            <Title order={2}>{clientData.name}</Title>
-            <Group gap="xs" mt={4}>
-              <CommonBadge color="var(--primary)">
-                PAN: {clientData.pan}
-              </CommonBadge>
-              <Text size="sm" c="var(--muted-foreground)">
-                •
-              </Text>
-              <Text size="sm" c="var(--muted-foreground)">
-                {clientData.address}
-              </Text>
-              <Text size="sm" c="var(--muted-foreground)">
-                •
-              </Text>
-              <Text size="sm" c="var(--muted-foreground)">
-                VAT:{" "}
-                {filingPeriods.find(
-                  (p) => p.id === clientData.vatFilingPeriodId,
-                )?.name ||
-                  clientData.vatFilingPeriodName ||
-                  "-"}
-              </Text>
-            </Group>
+            {clientLoading ? (
+              <>
+                <Skeleton height={28} width={220} radius="sm" mb={8} />
+                <Group gap="xs" mt={4}>
+                  <Skeleton height={20} width={110} radius="sm" />
+                  <Skeleton height={16} width={140} radius="sm" />
+                  <Skeleton height={16} width={100} radius="sm" />
+                </Group>
+              </>
+            ) : (
+              <>
+                <Title order={2}>{clientData.name}</Title>
+                <Group gap="xs" mt={4}>
+                  <CommonBadge color="var(--primary)">
+                    PAN: {clientData.pan}
+                  </CommonBadge>
+                  <Text size="sm" c="var(--muted-foreground)">
+                    •
+                  </Text>
+                  <Text size="sm" c="var(--muted-foreground)">
+                    {clientData.address}
+                  </Text>
+                  <Text size="sm" c="var(--muted-foreground)">
+                    •
+                  </Text>
+                  <Text size="sm" c="var(--muted-foreground)">
+                    VAT:{" "}
+                    {filingPeriods.find(
+                      (p) => p.id === clientData.vatFilingPeriodId,
+                    )?.name ||
+                      clientData.vatFilingPeriodName ||
+                      "-"}
+                  </Text>
+                </Group>
+              </>
+            )}
           </Box>
           <Group>
             <CommonButton
@@ -525,6 +580,7 @@ const handleExportPDF = async () => {
                 setClientFormErrors({});
                 setIsEditClientOpen(true);
               }}
+              disabled={clientLoading}
             >
               Edit Client
             </CommonButton>
@@ -540,86 +596,94 @@ const handleExportPDF = async () => {
       </Box>
 
       <SimpleGrid cols={{ base: 2, md: 3, lg: 6 }} mb="xl">
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
-              Total Purchase
-            </Text>
-            <ShoppingCart size={16} color="var(--muted-foreground)" />
-          </Group>
-          <Text size="xl" fw={700}>
-            {totalPurchase.toLocaleString()}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
-              Total Sales
-            </Text>
-            <Tag size={16} color="var(--muted-foreground)" />
-          </Group>
-          <Text size="xl" fw={700}>
-            {totalSales.toLocaleString()}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
-              Purchase Return
-            </Text>
-            <CornerDownLeft size={16} color="var(--muted-foreground)" />
-          </Group>
-          <Text size="xl" fw={700}>
-            {purchaseReturn.toLocaleString()}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
-              Sales Return
-            </Text>
-            <CornerUpRight size={16} color="var(--muted-foreground)" />
-          </Group>
-          <Text size="xl" fw={700}>
-            {salesReturn.toLocaleString()}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
-              Net Taxables
-            </Text>
-            <Calculator
-              size={16}
-              color={netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
-            />
-          </Group>
-          <Text
-            size="xl"
-            fw={700}
-            c={netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
-          >
-            {netTaxable.toLocaleString()}
-          </Text>
-        </Paper>
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" align="center" mb="xs">
-            <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
-              Net VAT
-            </Text>
-            <Landmark
-              size={16}
-              color={netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
-            />
-          </Group>
-          <Text
-            size="xl"
-            fw={700}
-            c={netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
-          >
-            {netVat.toLocaleString()}
-          </Text>
-        </Paper>
+        {isStatsLoading ? (
+          Array.from({ length: STAT_CARD_COUNT }).map((_, i) => (
+            <StatCardSkeleton key={i} />
+          ))
+        ) : (
+          <>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
+                  Total Purchase
+                </Text>
+                <ShoppingCart size={16} color="var(--muted-foreground)" />
+              </Group>
+              <Text size="xl" fw={700}>
+                {totalPurchase.toLocaleString()}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
+                  Total Sales
+                </Text>
+                <Tag size={16} color="var(--muted-foreground)" />
+              </Group>
+              <Text size="xl" fw={700}>
+                {totalSales.toLocaleString()}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
+                  Purchase Return
+                </Text>
+                <CornerDownLeft size={16} color="var(--muted-foreground)" />
+              </Group>
+              <Text size="xl" fw={700}>
+                {purchaseReturn.toLocaleString()}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
+                  Sales Return
+                </Text>
+                <CornerUpRight size={16} color="var(--muted-foreground)" />
+              </Group>
+              <Text size="xl" fw={700}>
+                {salesReturn.toLocaleString()}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
+                  Net Taxables
+                </Text>
+                <Calculator
+                  size={16}
+                  color={netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+                />
+              </Group>
+              <Text
+                size="xl"
+                fw={700}
+                c={netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+              >
+                {netTaxable.toLocaleString()}
+              </Text>
+            </Paper>
+            <Paper withBorder p="md" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text size="xs" c="var(--muted-foreground)" fw={500} tt="uppercase">
+                  Net VAT
+                </Text>
+                <Landmark
+                  size={16}
+                  color={netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+                />
+              </Group>
+              <Text
+                size="xl"
+                fw={700}
+                c={netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+              >
+                {netVat.toLocaleString()}
+              </Text>
+            </Paper>
+          </>
+        )}
       </SimpleGrid>
 
       <Paper withBorder radius="md">
@@ -634,8 +698,8 @@ const handleExportPDF = async () => {
               Transactions
             </Title>
             <Group gap="md">
-      <NepaliDatePicker placeholder="Start Date" value={startDate} onChange={setStartDate} />
-      <NepaliDatePicker placeholder="End Date" value={endDate} onChange={setEndDate} />
+              <NepaliDatePicker placeholder="Start Date" value={startDate} onChange={setStartDate} />
+              <NepaliDatePicker placeholder="End Date" value={endDate} onChange={setEndDate} />
               <CommonButton
                 size="xs"
                 variant="light"
@@ -643,6 +707,7 @@ const handleExportPDF = async () => {
                 leftSection={<FileSpreadsheet size={14} />}
                 onClick={handleExportExcel}
                 disabled={false}
+                loading={isExporting}
               >
                 Export Excel
               </CommonButton>
@@ -651,6 +716,7 @@ const handleExportPDF = async () => {
                 variant="light"
                 leftSection={<Download size={14} />}
                 onClick={handleExportPDF}
+                loading={isExportingPDF}
               >
                 Export PDF
               </CommonButton>
@@ -671,90 +737,94 @@ const handleExportPDF = async () => {
             "Total",
             "Actions",
           ]}
-          isEmpty={transactions.length === 0}
+          isEmpty={!isTableInitialLoading && !loading && transactions.length === 0}
           emptyMessage="No transactions found."
         >
-          {transactions.map((tx) => (
-            <Table.Tr key={tx.id}>
-              <Table.Td>{tx.date}</Table.Td>
-              <Table.Td>
-                <CommonBadge
-                  color={
-                    tx.type.includes("Sales")
-                      ? "var(--chart-2)"
-                      : "var(--primary)"
-                  }
-                >
-                  {tx.type}
-                </CommonBadge>
-              </Table.Td>
-              <Table.Td>
-                {tx.items && tx.items.length > 0
-                  ? tx.items.map((item: any) => (
-                      <div key={item.id}>
-                        {tx.type.includes("Return")
-                          ? [
-                              item.debitInvoice
-                                ? `Dr: ${item.debitInvoice}`
-                                : "",
-                              item.creditInvoice
-                                ? `Cr: ${item.creditInvoice}`
-                                : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" | ") || "-"
-                          : item.invoice || "-"}
-                      </div>
-                    ))
-                  : tx.type.includes("Return")
-                    ? [
-                        tx.debitInvoice ? `Dr: ${tx.debitInvoice}` : "",
-                        tx.creditInvoice ? `Cr: ${tx.creditInvoice}` : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" | ") || "-"
-                    : tx.invoice || "-"}
-              </Table.Td>
-              <Table.Td>
-                {tx.items && tx.items.length > 0
-                  ? tx.items.map((item: any) => (
-                      <div key={item.id}>{item.particulars || "-"}</div>
-                    ))
-                  : tx.particulars}
-              </Table.Td>
-              <Table.Td>
-                {tx.items && tx.items.length > 0
-                  ? tx.items.map((item: any) => (
-                      <div key={item.id}>{item.pan || "-"}</div>
-                    ))
-                  : tx.pan}
-              </Table.Td>
-              <Table.Td>{tx.amount.toLocaleString()}</Table.Td>
-              <Table.Td>{(tx.taxable ?? tx.amount).toLocaleString()}</Table.Td>
-              <Table.Td>{(tx.nonTaxable ?? 0).toLocaleString()}</Table.Td>
-              <Table.Td>{tx.tax.toLocaleString()}</Table.Td>
-              <Table.Td>{(tx.amount + tx.tax).toLocaleString()}</Table.Td>
-              <Table.Td>
-                <Group gap="xs">
-                  <ActionIcon
-                    component={Link}
-                    href={`/admin/clients/${slug}/add-transaction?txId=${tx.id}`}
-                    variant="light"
-                    color="var(--chart-3)"
-                  >
-                    <Edit size={16} />
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="light"
-                    color="var(--destructive)"
-                    onClick={() => handleDelete(tx.id)}
-                  >
-                    <Trash2 size={16} />
-                  </ActionIcon>
-                </Group>
-              </Table.Td>
-            </Table.Tr>
-          ))}
+          {isTableInitialLoading
+            ? Array.from({ length: SKELETON_ROW_COUNT }).map((_, i) => (
+                <TransactionRowSkeleton key={i} />
+              ))
+            : transactions.map((tx) => (
+                <Table.Tr key={tx.id}>
+                  <Table.Td>{tx.date}</Table.Td>
+                  <Table.Td>
+                    <CommonBadge
+                      color={
+                        tx.type.includes("Sales")
+                          ? "var(--chart-2)"
+                          : "var(--primary)"
+                      }
+                    >
+                      {tx.type}
+                    </CommonBadge>
+                  </Table.Td>
+                  <Table.Td>
+                    {tx.items && tx.items.length > 0
+                      ? tx.items.map((item: any) => (
+                          <div key={item.id}>
+                            {tx.type.includes("Return")
+                              ? [
+                                  item.debitInvoice
+                                    ? `Dr: ${item.debitInvoice}`
+                                    : "",
+                                  item.creditInvoice
+                                    ? `Cr: ${item.creditInvoice}`
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" | ") || "-"
+                              : item.invoice || "-"}
+                          </div>
+                        ))
+                      : tx.type.includes("Return")
+                        ? [
+                            tx.debitInvoice ? `Dr: ${tx.debitInvoice}` : "",
+                            tx.creditInvoice ? `Cr: ${tx.creditInvoice}` : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" | ") || "-"
+                        : tx.invoice || "-"}
+                  </Table.Td>
+                  <Table.Td>
+                    {tx.items && tx.items.length > 0
+                      ? tx.items.map((item: any) => (
+                          <div key={item.id}>{item.particulars || "-"}</div>
+                        ))
+                      : tx.particulars}
+                  </Table.Td>
+                  <Table.Td>
+                    {tx.items && tx.items.length > 0
+                      ? tx.items.map((item: any) => (
+                          <div key={item.id}>{item.pan || "-"}</div>
+                        ))
+                      : tx.pan}
+                  </Table.Td>
+                  <Table.Td>{tx.amount.toLocaleString()}</Table.Td>
+                  <Table.Td>{(tx.taxable ?? tx.amount).toLocaleString()}</Table.Td>
+                  <Table.Td>{(tx.nonTaxable ?? 0).toLocaleString()}</Table.Td>
+                  <Table.Td>{tx.tax.toLocaleString()}</Table.Td>
+                  <Table.Td>{(tx.amount + tx.tax).toLocaleString()}</Table.Td>
+                  <Table.Td>
+                    <Group gap="xs">
+                      <ActionIcon
+                        component={Link}
+                        href={`/admin/clients/${slug}/add-transaction?txId=${tx.id}`}
+                        variant="light"
+                        color="var(--chart-3)"
+                      >
+                        <Edit size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="light"
+                        color="var(--destructive)"
+                        onClick={() => handleDelete(tx.id)}
+                      >
+                        <Trash2 size={16} />
+                      </ActionIcon>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
         </CommonTable>
         {totalCount > itemsPerPage && (
           <CommonPagination

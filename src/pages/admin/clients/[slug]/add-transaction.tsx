@@ -22,6 +22,9 @@ import {
 } from "@mantine/core";
 
 import { CommonButton } from "@/components/common";
+import "nepali-datepicker-reactjs/dist/index.css";
+
+import NepaliDatePicker from "@/components/common/NepaliDatePIcker";
 import {
   FiscalYear,
   getFiscalYearFromDate,
@@ -89,17 +92,28 @@ const extractErrorMessage = (source: any, fallback: string): string =>
   source?.message ||
   fallback;
 
+// Helper: turns any input into a clean non-negative integer, or 0 if invalid.
+const toSafeInt = (value: any): number => {
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  if (!digitsOnly) return 0;
+  const n = Math.trunc(Number(digitsOnly));
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Helper: PAN as a clean digit-only string (kept as string for leading-zero safety).
+const toSafePan = (value: any): string => String(value ?? "").replace(/\D/g, "");
+
 const itemToPayload = (
   type: string,
   item: TxItem,
 ): TransactionPayload => ({
   transaction_type: uiToApiType[type] || "SALES",
   transaction_date: toRFC3339(item.date),
-  pan_no: Number(item.pan) || 0,
+  pan_no: /^\d+$/.test(item.pan) ? Number(item.pan) : 0,
   party: item.particulars,
-  invoice_no: item.invoice ? Number(item.invoice) || 0 : 0,
-  debit_invoice_no: item.debitInvoice ? Number(item.debitInvoice) || 0 : 0,
-  credit_invoice_no: item.creditInvoice ? Number(item.creditInvoice) || 0 : 0,
+  invoice_no: Number.isInteger(item.invoice) ? item.invoice : 0,
+  debit_invoice_no: Number.isInteger(item.debitInvoice) ? (item.debitInvoice ?? 0) : 0,
+  credit_invoice_no: Number.isInteger(item.creditInvoice) ? (item.creditInvoice ?? 0) : 0,
   amount: item.amount,
   taxable: item.taxable,
   non_taxable: item.nonTaxable,
@@ -211,10 +225,10 @@ export default function AddTransaction() {
         const loadedItem: TxItem = {
           id: Date.now().toString(),
           date: tx.transaction_date ? String(tx.transaction_date).split("T")[0] : getTodayDate(),
-          invoice: tx.invoice_no && tx.invoice_no !== 0 ? Number(tx.invoice_no) : 0,
-          debitInvoice: tx.debit_invoice_no && tx.debit_invoice_no !== 0 ? Number(tx.debit_invoice_no) : 0,
-          creditInvoice: tx.credit_invoice_no && tx.credit_invoice_no !== 0 ? Number(tx.credit_invoice_no) : 0,
-          pan: tx.pan_no ? String(tx.pan_no) : "",
+          invoice: toSafeInt(tx.invoice_no),
+          debitInvoice: toSafeInt(tx.debit_invoice_no),
+          creditInvoice: toSafeInt(tx.credit_invoice_no),
+          pan: toSafePan(tx.pan_no),
           particulars: tx.party || "",
           isImport: Boolean(tx.import),
           isCapitalPurchase: Boolean(tx.capital),
@@ -256,7 +270,7 @@ export default function AddTransaction() {
           ? raw
               .map((p: any) => ({
                 party: String(p?.party ?? p?.name ?? "").trim(),
-                pan: String(p?.pan_no ?? p?.pan ?? "").trim(),
+                pan: toSafePan(p?.pan_no ?? p?.pan ?? ""),
               }))
               .filter((r: { party: string; pan: string }) => r.party)
           : [];
@@ -301,15 +315,36 @@ export default function AddTransaction() {
     } else {
       let hasError = false;
       let amountError = false;
+      let panError = false;
+      let invoiceError = false;
       const isReturn = formData.type === "Sales Return" || formData.type === "Purchase Return";
+
       for (const item of formData.items) {
         if (!item.date) hasError = true;
-        if (!isReturn && item.invoice === 0) hasError = true;
-        if (!item.pan.trim()) hasError = true;
+
+        // PAN must be a clean, non-empty, positive integer string.
+        if (!/^\d+$/.test(item.pan.trim()) || Number(item.pan) <= 0) {
+          panError = true;
+        }
+
+        // Invoice numbers must be positive integers (never strings/floats/NaN).
+        if (!isReturn) {
+          if (!Number.isInteger(item.invoice) || item.invoice <= 0) {
+            invoiceError = true;
+          }
+        } else {
+          const hasDebit = Number.isInteger(item.debitInvoice) && (item.debitInvoice ?? 0) > 0;
+          const hasCredit = Number.isInteger(item.creditInvoice) && (item.creditInvoice ?? 0) > 0;
+          if (!hasDebit && !hasCredit) invoiceError = true;
+        }
+
         if (!item.particulars.trim()) hasError = true;
         if (item.amount < 0 || item.taxable < 0 || item.nonTaxable < 0) hasError = true;
         if (item.amount !== item.taxable + item.nonTaxable) amountError = true;
       }
+
+      if (panError) errors.pan = "PAN must be a valid whole number.";
+      if (invoiceError) errors.invoice = "Invoice number must be a valid whole number.";
       if (hasError)
         errors.items = "All items must have date, invoice, PAN, particulars and valid amounts.";
       else if (amountError)
@@ -371,6 +406,16 @@ export default function AddTransaction() {
 
     if (field === "amount" || field === "taxable" || field === "nonTaxable" || field === "vatPercent") {
       item[field] = Number(value) || 0;
+    }
+
+    // Invoice-type fields: always coerced to a clean non-negative integer.
+    if (field === "invoice" || field === "debitInvoice" || field === "creditInvoice") {
+      item[field] = toSafeInt(value);
+    }
+
+    // PAN: always a clean digit-only string (kept as string to preserve any leading zeros).
+    if (field === "pan") {
+      item.pan = toSafePan(value);
     }
 
     if (field === "date") {
@@ -485,16 +530,26 @@ export default function AddTransaction() {
                 {txFormErrors.items}
               </Text>
             )}
+            {txFormErrors.pan && (
+              <Text c="red" size="sm" mb="xs">
+                {txFormErrors.pan}
+              </Text>
+            )}
+            {txFormErrors.invoice && (
+              <Text c="red" size="sm" mb="xs">
+                {txFormErrors.invoice}
+              </Text>
+            )}
             {formData.items.some((item) => item.amount !== item.taxable + item.nonTaxable) && (
               <Text c="red" size="sm" mb="xs">
                 Amount must be exactly the sum of Taxable and Non-Taxable amounts.
               </Text>
             )}
-            
+
             <Table withTableBorder withColumnBorders style={{ tableLayout: "auto" }}>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th style={{ minWidth: 130 }}>Date</Table.Th>
+                  <Table.Th style={{ minWidth: 160 }}>Date (B.S.)</Table.Th>
                   {isReturnMode ? (
                     <>
                       <Table.Th style={{ minWidth: 140 }}>Debit Invoice</Table.Th>
@@ -517,16 +572,15 @@ export default function AddTransaction() {
                   <Table.Th style={{ width: 50 }} />
                 </Table.Tr>
               </Table.Thead>
-              
+
               <Table.Tbody>
                 {formData.items.map((item, index) => (
                   <Table.Tr key={item.id}>
                     <Table.Td>
-                      <TextInput
-                        type="date"
+                      <NepaliDatePicker
                         value={item.date}
-                        onChange={(e) => handleItemChange(index, "date", e.currentTarget.value)}
-                        variant="unstyled"
+                        onChange={(adDate) => handleItemChange(index, "date", adDate)}
+                        placeholder="Select date"
                       />
                     </Table.Td>
                     {isReturnMode ? (
@@ -534,16 +588,30 @@ export default function AddTransaction() {
                         <Table.Td>
                           <TextInput
                             placeholder="Debit Invoice"
+                            inputMode="numeric"
                             value={item.debitInvoice || ""}
-                            onChange={(e) => handleItemChange(index, "debitInvoice", e.currentTarget.value)}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "debitInvoice",
+                                e.currentTarget.value.replace(/\D/g, ""),
+                              )
+                            }
                             variant="unstyled"
                           />
                         </Table.Td>
                         <Table.Td>
                           <TextInput
                             placeholder="Credit Invoice"
+                            inputMode="numeric"
                             value={item.creditInvoice || ""}
-                            onChange={(e) => handleItemChange(index, "creditInvoice", e.currentTarget.value)}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "creditInvoice",
+                                e.currentTarget.value.replace(/\D/g, ""),
+                              )
+                            }
                             variant="unstyled"
                           />
                         </Table.Td>
@@ -552,8 +620,15 @@ export default function AddTransaction() {
                       <Table.Td>
                         <TextInput
                           placeholder="Invoice"
+                          inputMode="numeric"
                           value={item.invoice || ""}
-                          onChange={(e) => handleItemChange(index, "invoice", e.currentTarget.value)}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "invoice",
+                              e.currentTarget.value.replace(/\D/g, ""),
+                            )
+                          }
                           variant="unstyled"
                         />
                       </Table.Td>
@@ -561,6 +636,7 @@ export default function AddTransaction() {
                     <Table.Td>
                       <TextInput
                         placeholder="PAN"
+                        inputMode="numeric"
                         maxLength={9}
                         value={item.pan}
                         onChange={(e) => handleItemChange(index, "pan", e.currentTarget.value.replace(/\D/g, ""))}
@@ -659,7 +735,7 @@ export default function AddTransaction() {
                   </Table.Tr>
                 ))}
               </Table.Tbody>
-              
+
               <Table.Tfoot>
                 <Table.Tr>
                   <Table.Th colSpan={footerColSpan}>
