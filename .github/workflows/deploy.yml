@@ -1,0 +1,42 @@
+name: Reuse CI/CD Workflow
+
+on:
+  push:
+    branches:
+      - dev
+      - demo
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      custom_env: ${{ steps.setenv.outputs.env }}
+    steps:
+      - id: setenv
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "env=PROD" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
+            echo "env=DEV" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF_NAME}" == "demo" ]]; then
+            echo "env=DEMO" >> $GITHUB_OUTPUT
+          fi
+
+  trigger-ci:
+    needs: prepare
+    uses: devopsprabin/workflows/.github/workflows/deploy.yml@main
+    with:
+      github_actor: ${{ github.actor }}
+      deploy_folder_path: ${{ vars[format('DEPLOY_FOLDER_PATH_{0}', needs.prepare.outputs.custom_env)] }}
+      deploy_command: ${{ vars[format('DEPLOY_COMMAND_{0}', needs.prepare.outputs.custom_env)] }}
+    
+    secrets:
+      git_token: ${{ secrets.GITHUB_TOKEN }}
+      ssh_host: ${{ secrets[format('SSH_HOST_{0}', needs.prepare.outputs.custom_env)] }}
+      ssh_user: ${{ secrets[format('SSH_USER_{0}', needs.prepare.outputs.custom_env)] }}
+      ssh_port: ${{ secrets[format('SSH_PORT_{0}', needs.prepare.outputs.custom_env)] }}
+      ssh_private_key: ${{ secrets[format('SSH_PRIVATE_KEY_{0}', needs.prepare.outputs.custom_env)] }}
+      discord_webhook_id: ${{ secrets[format('DISCORD_WEBHOOK_ID_{0}', needs.prepare.outputs.custom_env)] }}
+      discord_webhook_token: ${{ secrets[format('DISCORD_WEBHOOK_TOKEN_{0}', needs.prepare.outputs.custom_env)] }}
