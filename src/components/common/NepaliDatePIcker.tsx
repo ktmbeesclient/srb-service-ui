@@ -1,14 +1,12 @@
 "use client";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { NepaliDatePicker as BSDatePicker } from "nepali-datepicker-reactjs";
 import { ADToBS, BSToAD } from "bikram-sambat-js";
 import { Text } from "@mantine/core";
 
 type NepaliDatePickerProps = {
   label?: string;
-  /** Current value as an AD "YYYY-MM-DD" string (matches your API/DB format). Empty string = unset. */
   value: string;
-  /** Called with an AD "YYYY-MM-DD" string, or "" when cleared. */
   onChange: (adDate: string) => void;
   placeholder?: string;
   error?: string;
@@ -18,23 +16,6 @@ type NepaliDatePickerProps = {
   inputClassName?: string;
 };
 
-/**
- * nepali-datepicker-reactjs shows/collects dates in BS. calenderLocale: "en"
- * just switches its display to English digits/month names — it does NOT
- * convert to Gregorian. This wrapper converts at the boundary so the rest
- * of the app keeps working with AD strings, exactly like the old
- * <TextInput type="date" /> did.
- *
- * The library doesn't reliably support a placeholder prop (see upstream
- * issue puncoz-official/nepali-datepicker-reactjs#19), so we overlay our
- * own placeholder text that only shows while the field is empty.
- *
- * IMPORTANT: this file must NOT import any CSS. Add the library's
- * stylesheet once, in pages/_app.tsx:
- *   import "nepali-datepicker-reactjs/dist/index.css";
- * Next.js's Pages Router throws a build error if global CSS is imported
- * from anywhere other than _app.
- */
 export default function NepaliDatePicker({
   label,
   value,
@@ -46,6 +27,8 @@ export default function NepaliDatePicker({
   className = "",
   inputClassName = "nepali-date-input",
 }: NepaliDatePickerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const bsValue = useMemo(() => {
     if (!value) return "";
     try {
@@ -67,8 +50,78 @@ export default function NepaliDatePicker({
     }
   };
 
+  // The library renders its calendar as a plain absolutely-positioned
+  // child of this wrapper. That's fine on its own, but when the wrapper
+  // sits inside a horizontally-scrolling ancestor (our line-items table,
+  // which has overflow-x: auto), an absolute popup gets clipped/scrolled
+  // with that ancestor instead of floating over the whole page.
+  //
+  // Fix, without forking the library: watch for the calendar node
+  // mounting, "escape" the scrolling ancestor by switching it to
+  // position: fixed, and manually pin it under the input using the
+  // input's live bounding rect. Fixed positioning is computed against
+  // the viewport, so it isn't affected by any ancestor's overflow/scroll.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    let calendarEl: HTMLElement | null = null;
+    let cleanupPositioning: (() => void) | null = null;
+
+    const positionCalendar = () => {
+      if (!calendarEl || !root) return;
+      const inputRect =
+        root.querySelector("input")?.getBoundingClientRect() ??
+        root.getBoundingClientRect();
+      const calendarWidth = calendarEl.offsetWidth || 300;
+      const viewportWidth = window.innerWidth;
+
+      let left = inputRect.left;
+      if (left + calendarWidth > viewportWidth - 8) {
+        left = Math.max(8, viewportWidth - calendarWidth - 8);
+      }
+
+      calendarEl.style.position = "fixed";
+      calendarEl.style.top = `${inputRect.bottom + 4}px`;
+      calendarEl.style.left = `${left}px`;
+      calendarEl.style.margin = "0";
+    };
+
+    const attachCalendar = (el: HTMLElement) => {
+      calendarEl = el;
+      positionCalendar();
+
+      window.addEventListener("scroll", positionCalendar, true);
+      window.addEventListener("resize", positionCalendar);
+
+      cleanupPositioning = () => {
+        window.removeEventListener("scroll", positionCalendar, true);
+        window.removeEventListener("resize", positionCalendar);
+      };
+    };
+
+    const observer = new MutationObserver(() => {
+      const found = root.querySelector<HTMLElement>(".calender");
+      if (found && found !== calendarEl) {
+        cleanupPositioning?.();
+        attachCalendar(found);
+      } else if (!found && calendarEl) {
+        cleanupPositioning?.();
+        calendarEl = null;
+      }
+    });
+
+    observer.observe(root, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      cleanupPositioning?.();
+    };
+  }, []);
+
   return (
     <div
+      ref={containerRef}
       style={{
         opacity: disabled ? 0.6 : 1,
         pointerEvents: disabled ? "none" : "auto",

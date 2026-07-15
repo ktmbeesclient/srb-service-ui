@@ -52,7 +52,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
 
 <Image
-  src="/srbservices.png"
+  src="/dark-theme-logo.png"
   alt="Srb Services"
   width={1080}
   height={1080}

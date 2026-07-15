@@ -83,7 +83,7 @@ export default function Login() {
           <Stack align="center" gap="xs">
             <div className="relative w-22.5 h-22.5 flex items-center justify-center">
               <Image
-                src="/srbservices.png"
+                src="/dark-theme-logo.png"
                 alt="SRB Services"
                 width={100}
                 height={90}

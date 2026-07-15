@@ -127,7 +127,7 @@ export default function DashboardLayout({ children, role }: LayoutProps) {
     onClick={() => router.push("/admin/clients")}
   />
   <Image
-    src="/dark-theme-logo1.png"
+    src="/dark-theme-logo.png"
     alt="Srb Services"
     width={1080}
     height={1080}
