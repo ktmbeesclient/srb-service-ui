@@ -31,6 +31,7 @@ import {
   LoadingOverlay,
   Badge,
   Skeleton,
+  Box,
 } from "@mantine/core";
 import {
   CommonHeading,
@@ -511,13 +512,15 @@ export default function AdminClients() {
           gap="md"
           justify="space-between"
           direction={{ base: "column", md: "row" }}
+
         >
-          <CommonSearch
-            placeholder="Search by Name, PAN, or Address..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 mr-80"
-          />
+         <Box className="w-full md:flex-1">
+    <CommonSearch
+      placeholder="Search by Name, PAN, or Address..."
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+    />
+  </Box>
           <CommonFilter
             value={vatFilter || ""}
             onChange={setVatFilter}

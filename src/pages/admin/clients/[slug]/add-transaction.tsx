@@ -506,7 +506,8 @@ export default function AddTransaction() {
         </Group>
       </Box>
 
-      <Paper withBorder radius="md" p="md">
+      <Paper withBorder radius="md" p="md" 
+      >
         <form onSubmit={handleSaveTransaction} noValidate>
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
             <Select

@@ -50,17 +50,7 @@ export default function NepaliDatePicker({
     }
   };
 
-  // The library renders its calendar as a plain absolutely-positioned
-  // child of this wrapper. That's fine on its own, but when the wrapper
-  // sits inside a horizontally-scrolling ancestor (our line-items table,
-  // which has overflow-x: auto), an absolute popup gets clipped/scrolled
-  // with that ancestor instead of floating over the whole page.
-  //
-  // Fix, without forking the library: watch for the calendar node
-  // mounting, "escape" the scrolling ancestor by switching it to
-  // position: fixed, and manually pin it under the input using the
-  // input's live bounding rect. Fixed positioning is computed against
-  // the viewport, so it isn't affected by any ancestor's overflow/scroll.
+
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
