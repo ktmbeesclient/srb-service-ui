@@ -577,13 +577,14 @@ export default function AddTransaction() {
               <Table.Tbody>
                 {formData.items.map((item, index) => (
                   <Table.Tr key={item.id}>
-                    <Table.Td>
-                      <NepaliDatePicker
-                        value={item.date}
-                        onChange={(adDate) => handleItemChange(index, "date", adDate)}
-                        placeholder="Select date"
-                      />
-                    </Table.Td>
+                   <Table.Td>
+  <NepaliDatePicker
+    value={item.date}
+    onChange={(adDate) => handleItemChange(index, "date", adDate)}
+    placeholder="Select date"
+    calendarPosition="top"
+  />
+</Table.Td>
                     {isReturnMode ? (
                       <>
                         <Table.Td>

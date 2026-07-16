@@ -14,6 +14,7 @@ type NepaliDatePickerProps = {
   disabled?: boolean;
   className?: string;
   inputClassName?: string;
+  calendarPosition?: "below" | "top";
 };
 
 export default function NepaliDatePicker({
@@ -26,6 +27,7 @@ export default function NepaliDatePicker({
   disabled,
   className = "",
   inputClassName = "nepali-date-input",
+  calendarPosition = "below",
 }: NepaliDatePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +52,6 @@ export default function NepaliDatePicker({
     }
   };
 
-
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
@@ -72,14 +73,35 @@ export default function NepaliDatePicker({
       }
 
       calendarEl.style.position = "fixed";
-      calendarEl.style.top = `${inputRect.bottom + 4}px`;
       calendarEl.style.left = `${left}px`;
       calendarEl.style.margin = "0";
+
+      if (calendarPosition === "top") {
+        // Position the calendar directly above the input using its actual
+        // rendered height. offsetHeight is only reliable once the popup has
+        // been through a layout pass, which is why this function gets
+        // called again (via rAF) right after the element is attached.
+        const calendarHeight = calendarEl.offsetHeight || 300;
+        const top = inputRect.top - calendarHeight - 4;
+        calendarEl.style.top = `${Math.max(8, top)}px`;
+      } else {
+        calendarEl.style.top = `${inputRect.bottom + 4}px`;
+      }
     };
 
     const attachCalendar = (el: HTMLElement) => {
       calendarEl = el;
+
+      // Hide until we have a real measurement so it never visibly jumps
+      // from an estimated position to the correct one.
+      el.style.visibility = "hidden";
       positionCalendar();
+
+      requestAnimationFrame(() => {
+        if (!calendarEl) return;
+        positionCalendar();
+        calendarEl.style.visibility = "visible";
+      });
 
       window.addEventListener("scroll", positionCalendar, true);
       window.addEventListener("resize", positionCalendar);
@@ -98,6 +120,10 @@ export default function NepaliDatePicker({
       } else if (!found && calendarEl) {
         cleanupPositioning?.();
         calendarEl = null;
+      } else if (found && found === calendarEl) {
+        // Content inside the open calendar changed (e.g. month/year
+        // dropdown toggled) — height may have changed, so reposition.
+        positionCalendar();
       }
     });
 
@@ -107,7 +133,7 @@ export default function NepaliDatePicker({
       observer.disconnect();
       cleanupPositioning?.();
     };
-  }, []);
+  }, [calendarPosition]);
 
   return (
     <div

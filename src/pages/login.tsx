@@ -82,14 +82,24 @@ export default function Login() {
         >
           <Stack align="center" gap="xs">
             <div className="relative w-22.5 h-22.5 flex items-center justify-center">
-              <Image
-                src="/dark-theme-logo.png"
-                alt="SRB Services"
-                width={100}
-                height={90}
-                className="object-contain"
-                priority
-              />
+               <Image
+                 src="/light-theme-logo.png"
+                 alt="Srb Services"
+                 width={1080}
+                 height={1080}
+                 priority
+                 className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='dark']_&]:hidden"
+                 onClick={() => router.push("/admin/clients")}
+               />
+               <Image
+                 src="/dark-theme-logo.png"
+                 alt="Srb Services"
+                 width={1080}
+                 height={1080}
+                 priority
+                 className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='light']_&]:hidden"
+                 onClick={() => router.push("/admin/clients")}
+               />
             </div>
 
             {/* <div className="text-center mt-2">

@@ -179,14 +179,14 @@ export default function AdminTransactions() {
       setIsExporting(true);
 
       await exportTransactionsExcel({
-        page,
-        pageSize: itemsPerPage,
+        // page,
+        // pageSize: itemsPerPage,
         search: debouncedSearch || undefined,
         types: typeFilter ? [typeFilter] : undefined,
         startDate: debouncedStartDate || undefined,
         endDate: debouncedEndDate || undefined,
         year: "2026/27",
-        vatPeriod: "Consolidated",
+        vatPeriod: "Consolidated",  
       });
     } catch (error: any) {
       console.error("Failed to export Excel:", error);
@@ -226,7 +226,7 @@ export default function AdminTransactions() {
             <NepaliDatePicker placeholder="End Date" value={endDate} onChange={setEndDate} />
           </Flex>
         </Flex>
-        <Flex gap="md" mt="md" align="center" justify="space-between">
+        <Flex gap="md" mt="md" align="center" justify="space-between" style={{ flexWrap: "wrap" }}>
           <CommonFilter
             value={typeFilter || ""}
             onChange={setTypeFilter}

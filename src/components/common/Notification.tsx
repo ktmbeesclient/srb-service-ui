@@ -1,6 +1,6 @@
 import { notifications } from "@mantine/notifications";
-import { CheckCircle2, XCircle, AlertTriangle, Info } from "lucide-react";
-import React from "react";
+import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
+
 
 type NotifyOptions = {
   title?: string;
