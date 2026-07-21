@@ -27,6 +27,11 @@ import {
   APIGetFillingPeriod,
   APIPostFillingPeriod,
 } from "../../../apis/filling-period";
+import {
+  APIGetFiscalYear,
+  APIPostFiscalYear,
+  APIDeleteFiscalYearById,
+} from "../../../apis/fiscal-year";
 
 type FilingPeriod = {
   id: string;
@@ -34,6 +39,12 @@ type FilingPeriod = {
   is_active?: boolean;
   active?: boolean;
   status?: boolean | string;
+};
+
+type FiscalYear = {
+  id: string;
+  year: string;
+  vat_percent: number;
 };
 
 // ---- Skeleton helpers, scoped to this page's list item shapes ----
@@ -80,9 +91,7 @@ export default function SettingsPage() {
   const [activePeriodNames, setActivePeriodNames] = useState<string[]>([]);
   const [isLoadingActivePeriod, setIsLoadingActivePeriod] = useState(true);
 
-  const [fiscalYears, setFiscalYears] = useState<
-    { id: string; year: string; vatAmount: number }[]
-  >([]);
+  const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [isLoadingFiscalYears, setIsLoadingFiscalYears] = useState(true);
 
   const [newFiscalYear, setNewFiscalYear] = useState({
@@ -152,27 +161,22 @@ export default function SettingsPage() {
     return false;
   };
 
+  const getFiscalYears = async () => {
+    setIsLoadingFiscalYears(true);
+    try {
+      const res = await APIGetFiscalYear();
+      setFiscalYears(res?.data?.data ?? []);
+    } catch (err) {
+      console.error("Failed to fetch fiscal years", err);
+    } finally {
+      setIsLoadingFiscalYears(false);
+    }
+  };
+
   React.useEffect(() => {
     getFilingPeriods();
     getActivePeriod();
-
-    setIsLoadingFiscalYears(true);
-    const storedFiscalYears = localStorage.getItem("fiscalYears");
-    if (storedFiscalYears) {
-      try {
-        setFiscalYears(JSON.parse(storedFiscalYears));
-      } catch (e) {
-        console.error("Failed to parse fiscalYears", e);
-      }
-    } else {
-      const initial = [
-        { id: "1", year: "2080/81", vatAmount: 13 },
-        { id: "2", year: "2081/82", vatAmount: 13 },
-      ];
-      setFiscalYears(initial);
-      localStorage.setItem("fiscalYears", JSON.stringify(initial));
-    }
-    setIsLoadingFiscalYears(false);
+    getFiscalYears();
   }, []);
 
   const handleAddPeriod = async (e: React.FormEvent) => {
@@ -202,30 +206,31 @@ export default function SettingsPage() {
     }
   };
 
-  const saveFiscalYears = (years: typeof fiscalYears) => {
-    setFiscalYears(years);
-    localStorage.setItem("fiscalYears", JSON.stringify(years));
-  };
-
-  const handleAddFiscalYear = (e: React.FormEvent) => {
+  const handleAddFiscalYear = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!newFiscalYear.year || !newFiscalYear.vatAmount) return;
 
-    saveFiscalYears([
-      ...fiscalYears,
-      {
-        id: Date.now().toString(),
+    try {
+      await APIPostFiscalYear({
         year: newFiscalYear.year,
-        vatAmount: parseFloat(newFiscalYear.vatAmount),
-      },
-    ]);
+        vat_percent: parseFloat(newFiscalYear.vatAmount),
+      });
 
-    setNewFiscalYear({ year: "", vatAmount: "" });
+      setNewFiscalYear({ year: "", vatAmount: "" });
+      await getFiscalYears();
+    } catch (err) {
+      console.error("Failed to add fiscal year", err);
+    }
   };
 
-  const handleDeleteFiscalYear = (id: string) => {
-    saveFiscalYears(fiscalYears.filter((p) => p.id !== id));
+  const handleDeleteFiscalYear = async (id: string) => {
+    try {
+      await APIDeleteFiscalYearById(id);
+      await getFiscalYears();
+    } catch (err) {
+      console.error("Failed to delete fiscal year", err);
+    }
   };
 
   return (
@@ -449,7 +454,7 @@ export default function SettingsPage() {
                         <Box>
                           <Text fw={500}>{fy.year}</Text>
                           <Text size="xs" c="var(--muted-foreground)">
-                            VAT: {fy.vatAmount}%
+                            VAT: {fy.vat_percent}%
                           </Text>
                         </Box>
 

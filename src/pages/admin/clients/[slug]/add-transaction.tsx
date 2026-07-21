@@ -102,28 +102,38 @@ const toSafeInt = (value: any): number => {
 
 // Helper: PAN as a clean digit-only string (kept as string for leading-zero safety).
 const toSafePan = (value: any): string => String(value ?? "").replace(/\D/g, "");
-
 const itemToPayload = (
   type: string,
   item: TxItem,
-): TransactionPayload => ({
-  transaction_type: uiToApiType[type] || "SALES",
-  transaction_date: toRFC3339(item.date),
-  pan_no: /^\d+$/.test(item.pan) ? Number(item.pan) : 0,
-  party: item.particulars,
-  invoice_no: Number.isInteger(item.invoice) ? item.invoice : 0,
-  debit_invoice_no: Number.isInteger(item.debitInvoice) ? (item.debitInvoice ?? 0) : 0,
-  credit_invoice_no: Number.isInteger(item.creditInvoice) ? (item.creditInvoice ?? 0) : 0,
-  amount: item.amount,
-  taxable: item.taxable,
-  non_taxable: item.nonTaxable,
-  vat: item.vatPercent,
-  vat_amount: item.tax,
-  grand_total: item.grandTotal,
-  status: true,
-  import: item.isImport || false,
-  capital: item.isCapitalPurchase || false,
-});
+): TransactionPayload => {
+  const payload: TransactionPayload = {
+    transaction_type: uiToApiType[type] || "SALES",
+    transaction_date: toRFC3339(item.date),
+    pan_no: /^\d+$/.test(item.pan) ? Number(item.pan) : 0,
+    party: item.particulars,
+    taxable: item.taxable,
+    non_taxable: item.nonTaxable,
+    vat: item.vatPercent,
+    status: true,
+    import: item.isImport || false,
+    capital: item.isCapitalPurchase || false,
+  };
+
+  // Treat 0/undefined/null as "not provided" — invoice numbers are
+  // never legitimately 0, so this avoids sending a phantom "0" string
+  // that would pass the backend's non-nil checks incorrectly.
+  if (item.invoice && item.invoice > 0) {
+    payload.invoice_no = String(item.invoice);
+  }
+  if (item.debitInvoice && item.debitInvoice > 0) {
+    payload.debit_invoice_no = String(item.debitInvoice);
+  }
+  if (item.creditInvoice && item.creditInvoice > 0) {
+    payload.credit_invoice_no = String(item.creditInvoice);
+  }
+
+  return payload;
+};
 
 export default function AddTransaction() {
   const router = useRouter();
