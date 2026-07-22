@@ -9,72 +9,53 @@ import {
   Container,
   Text,
   Stack,
-  SegmentedControl,
 } from "@mantine/core";
-import { ShieldCheck, Hash, Lock, User } from "lucide-react";
+import { ShieldCheck, Hash, Lock } from "lucide-react";
 import { ApiLogin, Login as LoginPayload } from "../../apis/auth";
 import { setCookie } from "cookies-next";
 import { decodeAccessToken } from "@/utils/jwt";
 import Image from "next/image";
 import showNotify from "@/utils/notify";
 
-type LoginMode = "client" | "admin";
-
 export default function Login() {
-  const [loginMode, setLoginMode] = useState<LoginMode>("client");
-  const [panNumber, setPanNumber] = useState("");
-  const [name, setName] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
 
-  const handleModeChange = (value: string) => {
-    setLoginMode(value as LoginMode);
-    setPanNumber("");
-    setName("");
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setLoading(true);
 
     try {
-      const payload: LoginPayload =
-        loginMode === "client"
-          ? { pan_number: parseInt(panNumber), password }
-          : { name, password };
+      const parsedPan = parseInt(identifier, 10);
+      const payload: LoginPayload = Number.isNaN(parsedPan)
+        ? { name: identifier, password }
+        : { pan_number: parsedPan, password };
 
       const res = await ApiLogin(payload);
 
       const accessToken = res?.data?.data?.access_token;
       const refreshToken = res?.data?.data?.refresh_token;
-      console.log("Access Token:", accessToken);
-      console.log("Refresh Token:", refreshToken);
+
       setCookie("access_token", accessToken);
       setCookie("refresh_token", refreshToken);
 
-     const payloadToken = decodeAccessToken(accessToken);
+      const payloadToken = decodeAccessToken(accessToken);
 
-console.log("Decoded Token:", payloadToken);
-console.log("Role:", payloadToken.client_role);
+      setCookie("client_id", payloadToken.client_id);
+      setCookie("client_role", payloadToken.client_role);
 
-setCookie("client_id", payloadToken.client_id);
-setCookie("client_role", payloadToken.client_role);
-
-if (payloadToken.client_role === "SUPER_ADMIN") {
-  console.log("Redirecting to admin clients");
-  const success = await router.push("/admin/clients");
-
-console.log("Navigation result:", success);
-console.log("Current route:", router.pathname);
-} else if (payloadToken.client_role === "CLIENT") {
-  console.log("Redirecting to client dashboard");
-  await router.push("/client/dashboard");
-} else {
-  console.log("Unknown role:", payloadToken.client_role);
-  await router.push("/login");
-}
+      if (payloadToken.client_role === "SUPER_ADMIN") {
+        await router.push("/admin/clients");
+      } else if (payloadToken.client_role === "CLIENT") {
+        await router.push("/client/dashboard");
+      } else {
+        showNotify("error", "Unrecognized account role.");
+        await router.push("/login");
+      }
     } catch (err: any) {
       console.error(err);
 
@@ -111,7 +92,7 @@ console.log("Current route:", router.pathname);
                 height={1080}
                 priority
                 className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='dark']_&]:hidden"
-                onClick={() => router.push("/admin/clients")}
+                onClick={() => router.push("/")}
               />
               <Image
                 src="/dark-theme-logo.png"
@@ -120,65 +101,30 @@ console.log("Current route:", router.pathname);
                 height={1080}
                 priority
                 className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='light']_&]:hidden"
-                onClick={() => router.push("/admin/clients")}
+                onClick={() => router.push("/")}
               />
             </div>
           </Stack>
 
-          <SegmentedControl
-            fullWidth
-            mt="lg"
-            radius="md"
-            size="md"
-            color="green"
-            value={loginMode}
-            onChange={handleModeChange}
-            data={[
-              { label: "Client Login", value: "client" },
-              { label: "Admin Login", value: "admin" },
-            ]}
-          />
-
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            {loginMode === "client" ? (
-              <TextInput
-                label="PAN Number"
-                placeholder="Enter PAN Number"
-                value={panNumber}
-                onChange={(e) => setPanNumber(e.currentTarget.value)}
-                required
-                radius="md"
-                size="md"
-                leftSection={<Hash size={16} color="#64748b" />}
-                styles={{
-                  label: { color: "#1e293b", fontWeight: 600 },
-                  input: {
-                    backgroundColor: "#ffffff",
-                    color: "#111827",
-                    borderColor: "#d1d5db",
-                  },
-                }}
-              />
-            ) : (
-              <TextInput
-                label="Name"
-                placeholder="Enter Admin Name"
-                value={name}
-                onChange={(e) => setName(e.currentTarget.value)}
-                required
-                radius="md"
-                size="md"
-                leftSection={<User size={16} color="#64748b" />}
-                styles={{
-                  label: { color: "#1e293b", fontWeight: 600 },
-                  input: {
-                    backgroundColor: "#ffffff",
-                    color: "#111827",
-                    borderColor: "#d1d5db",
-                  },
-                }}
-              />
-            )}
+            <TextInput
+              label="PAN Number"
+              placeholder="Enter PAN Number"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.currentTarget.value)}
+              required
+              radius="md"
+              size="md"
+              leftSection={<Hash size={16} color="#64748b" />}
+              styles={{
+                label: { color: "#1e293b", fontWeight: 600 },
+                input: {
+                  backgroundColor: "#ffffff",
+                  color: "#111827",
+                  borderColor: "#d1d5db",
+                },
+              }}
+            />
 
             <PasswordInput
               label="Password"
