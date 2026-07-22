@@ -1,6 +1,6 @@
 export enum UserRolesEnum {
   SUPER_ADMIN = "SUPER_ADMIN",
-  CLIENT = "CLIENT",
+  CLIENT = "CLIEN",
 }
 
 export enum StatusEnum {

@@ -4,9 +4,9 @@ import { decodeAccessToken } from "@/utils/jwt";
 
 const axiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
-    withcredentials: true,
   },
 });
 
@@ -20,7 +20,7 @@ axiosInstance.interceptors.request.use(
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 axiosInstance.interceptors.response.use(
@@ -35,7 +35,8 @@ axiosInstance.interceptors.response.use(
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes("/refresh")
+      !originalRequest.url?.includes("/refresh") &&
+     !originalRequest.url?.includes("/login")
     ) {
       originalRequest._retry = true;
 
@@ -43,8 +44,6 @@ axiosInstance.interceptors.response.use(
         console.log("Refreshing access token...");
 
         const refreshToken = getCookie("refresh_token");
-
-     
 
         if (!refreshToken) {
           throw new Error("Refresh token not found");
@@ -54,7 +53,7 @@ axiosInstance.interceptors.response.use(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/refresh`,
           {
             refresh_token: refreshToken,
-          }
+          },
         );
 
         console.log("Refresh API Response:", refreshResponse.data);
@@ -71,9 +70,8 @@ axiosInstance.interceptors.response.use(
         setCookie("client_id", payload.client_id);
         setCookie("client_role", payload.client_role);
 
-        axiosInstance.defaults.headers.common[
-          "Authorization"
-        ] = `Bearer ${newAccessToken}`;
+        axiosInstance.defaults.headers.common["Authorization"] =
+          `Bearer ${newAccessToken}`;
 
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
 
@@ -105,7 +103,7 @@ axiosInstance.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default axiosInstance;

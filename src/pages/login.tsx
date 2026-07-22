@@ -11,15 +11,14 @@ import {
   Stack,
 } from "@mantine/core";
 import { ShieldCheck, Hash, Lock } from "lucide-react";
-import { ApiLogin } from "../../apis/auth";
+import { ApiLogin, Login as LoginPayload } from "../../apis/auth";
 import { setCookie } from "cookies-next";
 import { decodeAccessToken } from "@/utils/jwt";
 import Image from "next/image";
 import showNotify from "@/utils/notify";
 
-
 export default function Login() {
-  const [panNumber, setPanNumber] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -27,31 +26,35 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setLoading(true);
 
     try {
-      const res = await ApiLogin({
-        pan_number: parseInt(panNumber),
-        password,
-      });
+      const parsedPan = parseInt(identifier, 10);
+      const payload: LoginPayload = Number.isNaN(parsedPan)
+        ? { name: identifier, password }
+        : { pan_number: parsedPan, password };
 
-      const accessToken = res.data.data.access_token;
-      const refreshToken = res.data.data.refresh_token;
+      const res = await ApiLogin(payload);
+
+      const accessToken = res?.data?.data?.access_token;
+      const refreshToken = res?.data?.data?.refresh_token;
 
       setCookie("access_token", accessToken);
       setCookie("refresh_token", refreshToken);
 
-      const payload = decodeAccessToken(accessToken);
+      const payloadToken = decodeAccessToken(accessToken);
 
-      setCookie("client_id", payload.client_id);
-      setCookie("client_role", payload.client_role);
+      setCookie("client_id", payloadToken.client_id);
+      setCookie("client_role", payloadToken.client_role);
 
-      if (payload.client_role === "SUPER-ADMIN") {
-        router.push("/admin/clients");
-      } else if (payload.client_role === "CLIENT") {
-        router.push("/client/dashboard");
+      if (payloadToken.client_role === "SUPER_ADMIN") {
+        await router.push("/admin/clients");
+      } else if (payloadToken.client_role === "CLIENT") {
+        await router.push("/client/dashboard");
       } else {
-        router.push("/login");
+        showNotify("error", "Unrecognized account role.");
+        await router.push("/login");
       }
     } catch (err: any) {
       console.error(err);
@@ -59,7 +62,7 @@ export default function Login() {
       const message =
         err?.response?.data?.message ||
         err?.response?.data?.detail ||
-        "Invalid PAN number or password. Please try again.";
+        "Invalid credentials. Please try again.";
 
       showNotify("error", message);
     } finally {
@@ -82,51 +85,39 @@ export default function Login() {
         >
           <Stack align="center" gap="xs">
             <div className="relative w-22.5 h-22.5 flex items-center justify-center">
-               <Image
-                 src="/light-theme-logo.png"
-                 alt="Srb Services"
-                 width={1080}
-                 height={1080}
-                 priority
-                 className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='dark']_&]:hidden"
-                 onClick={() => router.push("/admin/clients")}
-               />
-               <Image
-                 src="/dark-theme-logo.png"
-                 alt="Srb Services"
-                 width={1080}
-                 height={1080}
-                 priority
-                 className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='light']_&]:hidden"
-                 onClick={() => router.push("/admin/clients")}
-               />
+              <Image
+                src="/light-theme-logo.png"
+                alt="Srb Services"
+                width={1080}
+                height={1080}
+                priority
+                className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='dark']_&]:hidden"
+                onClick={() => router.push("/")}
+              />
+              <Image
+                src="/dark-theme-logo.png"
+                alt="Srb Services"
+                width={1080}
+                height={1080}
+                priority
+                className="h-17 w-20 cursor-pointer ml-2 hover:cursor-pointer [html[data-mantine-color-scheme='light']_&]:hidden"
+                onClick={() => router.push("/")}
+              />
             </div>
-
-            {/* <div className="text-center mt-2">
-              <Title order={2} fw={800} className="text-slate-800 tracking-tight">
-                Welcome Back
-              </Title>
-              <Text c="dimmed" size="xs" mt={4} fw={500}>
-                Secure Billing & VAT Management System
-              </Text>
-            </div> */}
           </Stack>
 
-          <form onSubmit={handleLogin} className="mt-8 space-y-4">
+          <form onSubmit={handleLogin} className="mt-6 space-y-4">
             <TextInput
               label="PAN Number"
               placeholder="Enter PAN Number"
-              value={panNumber}
-              onChange={(e) => setPanNumber(e.currentTarget.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.currentTarget.value)}
               required
               radius="md"
               size="md"
               leftSection={<Hash size={16} color="#64748b" />}
               styles={{
-                label: {
-                  color: "#1e293b",
-                  fontWeight: 600,
-                },
+                label: { color: "#1e293b", fontWeight: 600 },
                 input: {
                   backgroundColor: "#ffffff",
                   color: "#111827",
@@ -145,21 +136,14 @@ export default function Login() {
               size="md"
               leftSection={<Lock size={16} color="#64748b" />}
               styles={{
-                label: {
-                  color: "#1e293b",
-                  fontWeight: 600,
-                },
+                label: { color: "#1e293b", fontWeight: 600 },
                 input: {
                   backgroundColor: "#ffffff",
                   color: "#111827",
                   borderColor: "#d1d5db",
                 },
-                innerInput: {
-                  color: "#111827",
-                },
-                visibilityToggle: {
-                  color: "#64748b",
-                },
+                innerInput: { color: "#111827" },
+                visibilityToggle: { color: "#64748b" },
               }}
             />
 

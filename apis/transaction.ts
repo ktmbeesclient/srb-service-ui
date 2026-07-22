@@ -5,23 +5,35 @@ import {
   DeleteRequest,
 } from "@/plugins/https";
 
+// Fields the client sends when creating/updating a transaction.
+// amount, vat_amount, and grand_total are NOT included here —
+// the backend calculates these server-side and ignores anything sent for them.
 export interface TransactionPayload {
   transaction_type: string;
   transaction_date: string;
   pan_no: number;
   party: string;
-  invoice_no: number;
-  debit_invoice_no: number;
-  credit_invoice_no: number;
-  amount: number;
+  invoice_no?: string;
+  debit_invoice_no?: string;
+  credit_invoice_no?: string;
   taxable: number;
   non_taxable: number;
   vat: number;
+  status?: boolean;
+  import?: boolean;
+  capital?: boolean;
+}
+
+// Shape of a transaction as returned FROM the API — includes
+// server-calculated fields and read-only metadata.
+export interface TransactionResponse extends TransactionPayload {
+  transaction_id: string;
+  client_id: string;
+  amount: number;
   vat_amount: number;
   grand_total: number;
-  status: boolean;
-  import: boolean;
-  capital: boolean;
+  client_name: string;
+  created_at: string;
 }
 
 export const ApiGetActiveTransaction = ({
@@ -56,6 +68,7 @@ export const ApiGetActiveTransaction = ({
     `/transactions/active${params.toString() ? `?${params}` : ""}`,
   );
 };
+
 export const APIGetTransactions = ({
   page,
   page_size,

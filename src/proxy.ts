@@ -18,7 +18,10 @@ export function proxy(request: NextRequest) {
     const payload = jwtDecode<TokenPayload>(token);
     const pathname = request.nextUrl.pathname;
 
-    if (pathname.startsWith("/admin") && payload.client_role !== "SUPER-ADMIN") {
+    if (
+      pathname.startsWith("/admin") &&
+      payload.client_role !== "SUPER_ADMIN"
+    ) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
