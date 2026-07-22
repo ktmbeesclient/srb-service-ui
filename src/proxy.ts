@@ -7,31 +7,22 @@ interface TokenPayload {
   exp: number;
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const token = request.cookies.get("access_token")?.value;
 
-  
   if (!token) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   try {
     const payload = jwtDecode<TokenPayload>(token);
-
     const pathname = request.nextUrl.pathname;
 
-
-    if (
-      pathname.startsWith("/admin") &&
-      payload.client_role !== "SUPER-ADMIN"
-    ) {
+    if (pathname.startsWith("/admin") && payload.client_role !== "SUPER-ADMIN") {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    if (
-      pathname.startsWith("/client") &&
-      payload.client_role !== "CLIENT"
-    ) {
+    if (pathname.startsWith("/client") && payload.client_role !== "CLIENT") {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
