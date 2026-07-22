@@ -452,7 +452,7 @@ export default function AdminClients() {
         </CommonButton>
       </Group>
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} mb="lg">
+      {/* <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} mb="lg">
         {isInitialLoading ? (
           Array.from({ length: STAT_CARD_COUNT }).map((_, i) => (
             <StatCardSkeleton key={i} />
@@ -505,8 +505,8 @@ export default function AdminClients() {
             </Paper>
           </>
         )}
-      </SimpleGrid>
-
+      </SimpleGrid> */}
+{/* 
       <Paper withBorder p="md" mb="lg" radius="md">
         <Flex
           gap="md"
@@ -531,7 +531,7 @@ export default function AdminClients() {
             }))}
           />
         </Flex>
-      </Paper>
+      </Paper> */}
 
       <Paper withBorder radius="md" pos="relative">
         {/* Overlay only for background refetches once we already have rows,

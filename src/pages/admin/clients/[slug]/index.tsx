@@ -95,6 +95,24 @@ type FilingPeriod = {
   name: string;
 };
 
+type TransactionSummary = {
+  totalPurchase: number;
+  totalSales: number;
+  purchaseReturn: number;
+  salesReturn: number;
+  netTaxable: number;
+  netVat: number;
+};
+
+const EMPTY_SUMMARY: TransactionSummary = {
+  totalPurchase: 0,
+  totalSales: 0,
+  purchaseReturn: 0,
+  salesReturn: 0,
+  netTaxable: 0,
+  netVat: 0,
+};
+
 const normalizeFilingPeriods = (payload: any): FilingPeriod[] => {
   const rawPeriods = payload?.data?.data ?? payload?.data ?? payload;
   const periods = Array.isArray(rawPeriods)
@@ -154,6 +172,7 @@ export default function ClientDetail() {
   const [filingPeriods, setFilingPeriods] = useState<FilingPeriod[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [summary, setSummary] = useState<TransactionSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(false);
   const [clientLoading, setClientLoading] = useState(true);
   const [startDate, setStartDate] = useState("");
@@ -333,14 +352,26 @@ export default function ClientDetail() {
         }));
         setTransactions(mappedData);
         setTotalCount(res.data.metadata?.Total ?? mappedData.length);
+
+        const s = res.data.summary;
+        setSummary({
+          totalPurchase: s?.total_purchase ?? 0,
+          totalSales: s?.total_sales ?? 0,
+          purchaseReturn: s?.purchase_return ?? 0,
+          salesReturn: s?.sales_return ?? 0,
+          netTaxable: s?.net_taxable ?? 0,
+          netVat: s?.net_vat ?? 0,
+        });
       } else {
         setTransactions([]);
         setTotalCount(0);
+        setSummary(EMPTY_SUMMARY);
       }
     } catch (e) {
       console.error("Error fetching transactions from API", e);
       setTransactions([]);
       setTotalCount(0);
+      setSummary(EMPTY_SUMMARY);
     } finally {
       setLoading(false);
     }
@@ -483,36 +514,6 @@ export default function ClientDetail() {
       setIsExportingPDF(false);
     }
   };
-  const totalSales = transactions
-    .filter((t) => t.type === "Sales")
-    .reduce((acc, t) => acc + t.amount, 0);
-  const totalPurchase = transactions
-    .filter((t) => t.type === "Purchase")
-    .reduce((acc, t) => acc + t.amount, 0);
-  const salesReturn = transactions
-    .filter((t) => t.type === "Sales Return")
-    .reduce((acc, t) => acc + t.amount, 0);
-  const purchaseReturn = transactions
-    .filter((t) => t.type === "Purchase Return")
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const netTaxable =
-    totalSales - salesReturn - (totalPurchase - purchaseReturn);
-
-  const salesTax = transactions
-    .filter((t) => t.type === "Sales")
-    .reduce((acc, t) => acc + t.tax, 0);
-  const purchaseTax = transactions
-    .filter((t) => t.type === "Purchase")
-    .reduce((acc, t) => acc + t.tax, 0);
-  const salesReturnTax = transactions
-    .filter((t) => t.type === "Sales Return")
-    .reduce((acc, t) => acc + t.tax, 0);
-  const purchaseReturnTax = transactions
-    .filter((t) => t.type === "Purchase Return")
-    .reduce((acc, t) => acc + t.tax, 0);
-
-  const netVat = salesTax - salesReturnTax - (purchaseTax - purchaseReturnTax);
 
   // First load only (no data yet) — shows skeletons instead of empty/zeroed
   // UI. Subsequent refetches (pagination, date filter changes) keep existing
@@ -610,7 +611,7 @@ export default function ClientDetail() {
                 <ShoppingCart size={16} color="var(--muted-foreground)" />
               </Group>
               <Text size="xl" fw={700}>
-                {totalPurchase.toLocaleString()}
+                {summary.totalPurchase.toLocaleString()}
               </Text>
             </Paper>
             <Paper withBorder p="md" radius="md">
@@ -621,7 +622,7 @@ export default function ClientDetail() {
                 <Tag size={16} color="var(--muted-foreground)" />
               </Group>
               <Text size="xl" fw={700}>
-                {totalSales.toLocaleString()}
+                {summary.totalSales.toLocaleString()}
               </Text>
             </Paper>
             <Paper withBorder p="md" radius="md">
@@ -632,7 +633,7 @@ export default function ClientDetail() {
                 <CornerDownLeft size={16} color="var(--muted-foreground)" />
               </Group>
               <Text size="xl" fw={700}>
-                {purchaseReturn.toLocaleString()}
+                {summary.purchaseReturn.toLocaleString()}
               </Text>
             </Paper>
             <Paper withBorder p="md" radius="md">
@@ -643,7 +644,7 @@ export default function ClientDetail() {
                 <CornerUpRight size={16} color="var(--muted-foreground)" />
               </Group>
               <Text size="xl" fw={700}>
-                {salesReturn.toLocaleString()}
+                {summary.salesReturn.toLocaleString()}
               </Text>
             </Paper>
             <Paper withBorder p="md" radius="md">
@@ -653,15 +654,15 @@ export default function ClientDetail() {
                 </Text>
                 <Calculator
                   size={16}
-                  color={netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+                  color={summary.netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
                 />
               </Group>
               <Text
                 size="xl"
                 fw={700}
-                c={netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+                c={summary.netTaxable >= 0 ? "var(--chart-1)" : "var(--destructive)"}
               >
-                {netTaxable.toLocaleString()}
+                {summary.netTaxable.toLocaleString()}
               </Text>
             </Paper>
             <Paper withBorder p="md" radius="md">
@@ -671,15 +672,15 @@ export default function ClientDetail() {
                 </Text>
                 <Landmark
                   size={16}
-                  color={netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+                  color={summary.netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
                 />
               </Group>
               <Text
                 size="xl"
                 fw={700}
-                c={netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
+                c={summary.netVat >= 0 ? "var(--chart-1)" : "var(--destructive)"}
               >
-                {netVat.toLocaleString()}
+                {summary.netVat.toLocaleString()}
               </Text>
             </Paper>
           </>
