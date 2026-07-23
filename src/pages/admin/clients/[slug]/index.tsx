@@ -206,8 +206,38 @@ export default function ClientDetail() {
     try {
       const res = await ApiGetClientBySlug(slug);
 
-      if (res?.data?.success) {
-        const client = res.data.data;
+      // This endpoint's actual response shape is:
+      //   { status: 'success', message: '...', client: { id, name, ... } }
+      // — NOT { success: true, data: {...} } like the transactions endpoints.
+      // Support both shapes defensively so this keeps working if the
+      // backend response is ever normalized later.
+      const body = res?.data;
+      const isSuccess = body?.status === "success" || body?.success === true;
+      const client = body?.client ?? body?.data;
+
+      if (isSuccess && client) {
+        // The backend field name for the client's ID isn't guaranteed to
+        // be a flat "id" — some endpoints in this codebase use "client_id"
+        // instead. If we only ever read client.id, a mismatch here means
+        // clientData.id silently stays "" forever, which blocks the
+        // transactions fetch entirely with no error anywhere in the app.
+        // Check the common alternates and log loudly if none match.
+        const resolvedId = String(
+          client?.id ??
+            client?.client_id ??
+            client?._id ??
+            "",
+        );
+
+        if (!resolvedId) {
+          console.error(
+            "[ClientDetail] ApiGetClientBySlug response has no recognizable id field " +
+              "(checked id, client_id, _id). Transactions will not load until this is fixed. " +
+              "Raw client object:",
+            client,
+          );
+        }
+
         const vatPeriodId = String(
           client.vat_filing_period_id ??
             client.period_id ??
@@ -222,7 +252,7 @@ export default function ClientDetail() {
         );
 
         setClientData({
-          id: client.id,
+          id: resolvedId,
           name: client.name,
           slug: client.slug,
           pan: String(client.pan_no),
@@ -231,7 +261,14 @@ export default function ClientDetail() {
           vatFilingPeriodId: vatPeriodId,
           vatFilingPeriodName: vatPeriodName,
         });
+      } else {
+        console.error(
+          "[ClientDetail] ApiGetClientBySlug did not return a recognizable success response:",
+          body,
+        );
       }
+    } catch (e) {
+      console.error("[ClientDetail] Error fetching client by slug:", e);
     } finally {
       setClientLoading(false);
     }
@@ -314,7 +351,13 @@ export default function ClientDetail() {
   };
 
   const fetchTransactions = async () => {
-    if (!slug || !clientData.id) return;
+    if (!slug || !clientData.id) {
+      console.warn(
+        "[ClientDetail] fetchTransactions skipped — slug or clientData.id missing.",
+        { slug, clientId: clientData.id },
+      );
+      return;
+    }
     setLoading(true);
     try {
       const res = await APIGetTransactions({
@@ -363,12 +406,16 @@ export default function ClientDetail() {
           netVat: s?.net_vat ?? 0,
         });
       } else {
+        console.error(
+          "[ClientDetail] Transactions fetch returned an unsuccessful response:",
+          res?.data,
+        );
         setTransactions([]);
         setTotalCount(0);
         setSummary(EMPTY_SUMMARY);
       }
     } catch (e) {
-      console.error("Error fetching transactions from API", e);
+      console.error("[ClientDetail] Error fetching transactions from API", e);
       setTransactions([]);
       setTotalCount(0);
       setSummary(EMPTY_SUMMARY);
@@ -873,13 +920,25 @@ export default function ClientDetail() {
 
           <Group align="flex-start" mb="sm" gap="xs" wrap="nowrap">
             <PasswordInput
-              label="Password (Leave blank to keep current)"
-              placeholder="Min. 8 characters"
-              style={{ flex: 1 }}
-              value={clientData.password}
-              error={clientFormErrors.password}
-              onChange={(e) => clientField("password", e.currentTarget.value)}
-            />
+  label="Password (Leave blank to keep current)"
+  placeholder="Min. 8 characters, no spaces"
+  style={{ flex: 1 }}
+  value={clientData.password}
+  error={clientFormErrors.password}
+  onKeyDown={(e) => {
+    if (e.key === " ") {
+      e.preventDefault();
+    }
+  }}
+  onPaste={(e) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text").replace(/\s/g, "");
+    clientField("password", text);
+  }}
+  onChange={(e) =>
+    clientField("password", e.currentTarget.value.replace(/\s/g, ""))
+  }
+/>
             <Tooltip
               label="Generate 12-character random password"
               position="top"

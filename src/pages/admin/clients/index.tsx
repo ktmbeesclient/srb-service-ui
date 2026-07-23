@@ -667,33 +667,46 @@ export default function AdminClients() {
             onChange={(e) => field("address", e.currentTarget.value)}
           />
 
-          <Group align="flex-start" mb="sm" gap="xs" wrap="nowrap">
-            <PasswordInput
-              required={!editingClientId}
-              label={`Password${editingClientId ? " (leave blank to keep current)" : ""}`}
-              placeholder="Min. 8 characters"
-              style={{ flex: 1 }}
-              value={formData.password}
-              error={formErrors.password}
-              onChange={(e) => field("password", e.currentTarget.value)}
-            />
-            <Tooltip
-              label="Generate 12-character random password"
-              position="top"
-            >
-              <ActionIcon
-                variant="light"
-                color="var(--primary)"
-                size={36}
-                mt={25}
-                onClick={() => {
-                  field("password", generateRandomPassword());
-                }}
-              >
-                <RefreshCw size={16} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
+         <Group align="flex-start" mb="sm" gap="xs" wrap="nowrap">
+  <PasswordInput
+    required={!editingClientId}
+    label={`Password${editingClientId ? " (leave blank to keep current)" : ""}`}
+    placeholder="Min. 8 characters, no spaces"
+    style={{ flex: 1 }}
+    value={formData.password}
+    error={formErrors.password}
+    onKeyDown={(e) => {
+      if (e.key === " ") {
+        e.preventDefault();
+      }
+    }}
+    onPaste={(e) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData("text").replace(/\s/g, "");
+      field("password", text);
+    }}
+    onChange={(e) =>
+      field("password", e.currentTarget.value.replace(/\s/g, ""))
+    }
+  />
+
+  <Tooltip
+    label="Generate 12-character random password"
+    position="top"
+  >
+    <ActionIcon
+      variant="light"
+      color="var(--primary)"
+      size={36}
+      mt={25}
+      onClick={() => {
+        field("password", generateRandomPassword());
+      }}
+    >
+      <RefreshCw size={16} />
+    </ActionIcon>
+  </Tooltip>
+</Group>
 
           <Select
             label="VAT Filing Period"

@@ -102,6 +102,20 @@ const toSafeInt = (value: any): number => {
 
 // Helper: PAN as a clean digit-only string (kept as string for leading-zero safety).
 const toSafePan = (value: any): string => String(value ?? "").replace(/\D/g, "");
+
+// Helper: extract client id from ApiGetClientBySlug's response, whose real
+// shape is { status: 'success', client: { id, ... } } (matches the same
+// defensive parsing used in ClientDetail). Deliberately does NOT fall back
+// to the slug string if resolution fails — that fallback was the bug that
+// caused "invalid client ID" on save, since the slug is not a valid UUID.
+const resolveClientIdFromResponse = (res: any): string => {
+  const body = res?.data;
+  const isSuccess = body?.status === "success" || body?.success === true;
+  const client = body?.client ?? body?.data;
+  const resolvedId = String(client?.id ?? client?.client_id ?? client?._id ?? "");
+  return isSuccess && resolvedId ? resolvedId : "";
+};
+
 const itemToPayload = (
   type: string,
   item: TxItem,
@@ -109,7 +123,12 @@ const itemToPayload = (
   const payload: TransactionPayload = {
     transaction_type: uiToApiType[type] || "SALES",
     transaction_date: toRFC3339(item.date),
-    pan_no: /^\d+$/.test(item.pan) ? Number(item.pan) : 0,
+    // PAN must be exactly 9 digits to satisfy the backend's `gte` validation
+    // on pan_no. A shorter numeric string (e.g. "45") used to pass a naive
+    // /^\d+$/ check but produced a too-small number the backend rejects.
+    // validateTxForm already blocks submission before this runs, so the
+    // `: 0` branch here is a defensive fallback only.
+    pan_no: /^\d{9}$/.test(item.pan) ? Number(item.pan) : 0,
     party: item.particulars,
     taxable: item.taxable,
     non_taxable: item.nonTaxable,
@@ -142,6 +161,7 @@ export default function AddTransaction() {
   const [txFormErrors, setTxFormErrors] = useState<TxErrors>({});
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [clientId, setClientId] = useState<string>("");
+  const [clientResolving, setClientResolving] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [particularSuggestions, setParticularSuggestions] = useState<string[]>([]);
   const [partyPanRecords, setPartyPanRecords] = useState<{ party: string; pan: string }[]>([]);
@@ -207,20 +227,33 @@ export default function AddTransaction() {
     }
   }, [fiscalYears, txId]);
 
+  // FIXED: resolves the real client id from the actual response shape
+  // ({ status: 'success', client: {...} }) and never falls back to the
+  // slug string, which is not a valid UUID and was causing "invalid client
+  // ID" errors on save.
   useEffect(() => {
     if (!slug || typeof slug !== "string") return;
+    setClientResolving(true);
     (async () => {
       try {
         const res = await ApiGetClientBySlug(slug);
-        if (res?.data?.success && res.data.data?.id) {
-          setClientId(String(res.data.data.id));
-          return;
+        const resolvedId = resolveClientIdFromResponse(res);
+
+        if (resolvedId) {
+          setClientId(resolvedId);
+        } else {
+          console.error(
+            "[AddTransaction] Could not resolve client id from ApiGetClientBySlug response:",
+            res?.data,
+          );
+          showNotify("error", "Failed to resolve client. Please go back and try again.");
         }
       } catch (error) {
         console.error("Error resolving client for transaction form", error);
         showNotify("error", "Failed to load client details. Please try again.");
+      } finally {
+        setClientResolving(false);
       }
-      setClientId(slug);
     })();
   }, [slug]);
 
@@ -332,8 +365,11 @@ export default function AddTransaction() {
       for (const item of formData.items) {
         if (!item.date) hasError = true;
 
-        // PAN must be a clean, non-empty, positive integer string.
-        if (!/^\d+$/.test(item.pan.trim()) || Number(item.pan) <= 0) {
+        // PAN must be exactly 9 digits — matches the backend's `gte`
+        // validation on a valid PAN range. A shorter numeric string
+        // (e.g. "45") used to pass a naive /^\d+$/ check but produced a
+        // too-small number that the backend's `gte` tag rejects.
+        if (!/^\d{9}$/.test(item.pan.trim())) {
           panError = true;
         }
 
@@ -353,7 +389,7 @@ export default function AddTransaction() {
         if (item.amount !== item.taxable + item.nonTaxable) amountError = true;
       }
 
-      if (panError) errors.pan = "PAN must be a valid whole number.";
+      if (panError) errors.pan = "PAN must be exactly 9 digits.";
       if (invoiceError) errors.invoice = "Invoice number must be a valid whole number.";
       if (hasError)
         errors.items = "All items must have date, invoice, PAN, particulars and valid amounts.";
@@ -516,7 +552,7 @@ export default function AddTransaction() {
         </Group>
       </Box>
 
-      <Paper withBorder radius="md" p="md" 
+      <Paper withBorder radius="md" p="md"
       >
         <form onSubmit={handleSaveTransaction} noValidate>
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
@@ -778,7 +814,7 @@ export default function AddTransaction() {
             >
               Cancel
             </CommonButton>
-            <CommonButton type="submit" loading={isSaving}>
+            <CommonButton type="submit" loading={isSaving} disabled={clientResolving || !clientId}>
               Save Transaction
             </CommonButton>
           </Group>
