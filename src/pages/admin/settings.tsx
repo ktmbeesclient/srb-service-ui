@@ -191,6 +191,7 @@ export default function SettingsPage() {
 
       setNewPeriod("");
       await getFilingPeriods();
+      await getActivePeriod();
     } catch (err) {
       console.error("Failed to add filing period", err);
     }

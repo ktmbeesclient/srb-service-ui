@@ -579,7 +579,7 @@ export default function AdminClients() {
                     </Badge>
                   </Table.Td>
                   <Table.Td>
-                    <Group gap="xs">
+                    <Group gap="xs" className="hover:cursor-pointer">
                       <Eye
                         size={16}
                         onClick={() =>
